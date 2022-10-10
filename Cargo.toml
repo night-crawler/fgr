@@ -1,0 +1,17 @@
+[package]
+name = "fgr"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nom = "7"
+thiserror = "1"
+strum = "0.24"
+strum_macros = "0.24"
+
+
+[lib]
+name = "parser"
+path = "src/parse/mod.rs"

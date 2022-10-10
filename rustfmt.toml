@@ -1,0 +1,7 @@
+edition = "2021"
+newline_style = "Unix"
+version = "Two"
+use_small_heuristics = "Max"
+merge_derives = false
+binop_separator = "Back"
+max_width = 120
