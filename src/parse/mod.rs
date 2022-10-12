@@ -1,183 +1,261 @@
-use nom::character::complete::{multispace0, multispace1, space0};
-use nom::combinator::{consumed, map_res, recognize};
-use nom::multi::{many0, many1};
+
+use nom::multi::many0;
 use nom::sequence::tuple;
 use nom::{
-    branch::alt,
-    bytes::complete::{escaped, tag, take_while},
-    character::complete::{alphanumeric1 as alphanumeric, char, one_of},
-    combinator::{cut, map, opt, value},
-    error::{context, convert_error, ContextError, ErrorKind, ParseError, VerboseError},
-    multi::separated_list0,
-    number::complete::double,
-    sequence::{delimited, preceded, separated_pair, terminated},
-    Err, IResult, Parser,
+    branch::alt, bytes::complete::tag, character::complete::char,
+    combinator::map, sequence::delimited, IResult,
 };
-use strum::IntoEnumIterator;
 
-use size_unit::SizeUnit;
+use crate::errors::GenericError;
+use crate::parse::expression_node::ExpressionNode;
+use crate::parse::primitives::parse_attribute_name;
+use crate::parse::traits::GenericParser;
+use crate::parse::util::ws;
 
-mod size_unit;
-mod time_unit;
+pub mod ast_node;
+pub mod attribute_token;
+pub mod comparison;
+pub mod expression_node;
+pub mod file_type;
+pub mod filter;
+pub mod primitives;
+pub mod render;
+pub mod size_unit;
+pub mod time_unit;
+pub mod traits;
+pub mod util;
+pub mod match_pattern;
 
-enum Token {
-    Size(SizeUnit),
+fn parse_attribute(input: &str) -> IResult<&str, ExpressionNode> {
+    let (input, attribute) = parse_attribute_name(input)?;
+    let (input, filter) = attribute.parse(input)?;
+
+    Ok((input, ExpressionNode::Leaf(filter)))
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum Comparison {
-    Lt,
-    Gt,
-    Lte,
-    Gte,
-    Eq,
-    Neq,
+fn parse_parens(input: &str) -> IResult<&str, ExpressionNode> {
+    let expressions = delimited(ws(char('(')), parse_or, ws(char(')')));
+    ws(expressions)(input)
 }
 
-impl TryFrom<&str> for Comparison {
-    type Error = ();
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "<=" => Ok(Comparison::Lte),
-            ">=" => Ok(Comparison::Gte),
-            "!=" => Ok(Comparison::Neq),
-            "<" => Ok(Comparison::Lt),
-            ">" => Ok(Comparison::Gt),
-            "=" => Ok(Comparison::Eq),
-            _ => Err(()),
-        }
-    }
-}
-
-fn space<'a, E: ParseError<&'a str>>(input: &'a str) -> IResult<&'a str, &'a str, E> {
-    let chars = " \t\r\n";
-    take_while(move |c| chars.contains(c))(input)
+fn parse_parens_or_attribute(input: &str) -> IResult<&str, ExpressionNode> {
+    alt((parse_parens, parse_attribute, parse_not))(input)
 }
 
 #[rustfmt::skip]
-fn decimal(input: &str) -> IResult<&str, &str> {
-    recognize(
-        many1(
-            terminated(
-                one_of("0123456789"),
-                many0(char('_')),
-            )
-        )
+fn parse_not(input: &str) -> IResult<&str, ExpressionNode> {
+    let (input, _) = ws(tag("not"))(input)?;
+    map(
+        alt((
+            parse_attribute,
+            parse_parens_or_attribute
+        )),
+        |expression| ExpressionNode::Not(expression.boxed()),
     )(input)
 }
 
 #[rustfmt::skip]
-fn number(input: &str) -> IResult<&str, isize> {
-    alt((
-        map_res(
-            preceded(
-                opt(char('+')),
-                decimal,
-            ),
-            |res| res.replace('_', "").parse(),
-        ),
-        map_res(
-            preceded(
-                char('-'),
-                decimal,
-            ),
-            |res| res.replace('_', "").parse().map(|num: isize| -num),
-        )
-    ))(input)
+fn parse_or(input: &str) -> IResult<&str, ExpressionNode> {
+    let (input, left) = parse_and(input)?;
+    let (input, expressions) = many0(
+        tuple((
+            ws(tag("or")),
+            parse_and
+        ))
+    )(input)?;
+
+    Ok((input, parse_expression(left, expressions)))
 }
 
 #[rustfmt::skip]
-fn comparison(input: &str) -> IResult<&str, Comparison> {
-    let ops = (
-        tag("<="),
-        tag(">="),
-        tag("!="),
-        tag("<"),
-        tag(">"),
-        tag("="),
-    );
+fn parse_and(input: &str) -> IResult<&str, ExpressionNode> {
+    let (input, left) = parse_parens_or_attribute(input)?;
+    let (input, expressions) = many0(
+        tuple((
+            ws(tag("and")),
+            parse_and
+        ))
+    )(input)?;
 
-    map_res(
-        recognize(alt(ops)),
-        Comparison::try_from,
-    )(input)
+    Ok((input, parse_expression(left, expressions)))
 }
 
 #[rustfmt::skip]
-fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
-    where
-        F: Fn(&'a str) -> IResult<&'a str, O, E>,
-{
-    delimited(
-        multispace0,
-        inner,
-        multispace0,
+fn parse_expression(expr: ExpressionNode, rem: Vec<(&str, ExpressionNode)>) -> ExpressionNode {
+    rem.into_iter().fold(
+        expr,
+        |acc, val| parse_operator(val, acc),
     )
 }
 
-#[rustfmt::skip]
-fn size(input: &str) -> IResult<&str, SizeUnit> {
-    let tags = alt((
-        tag("Mb"),
-        tag("Kb"),
-        tag("Tb")
-    ));
-
-    let size_parser = tuple((
-        terminated(number, opt(multispace0)),
-        recognize(opt(tags))
-    ));
-
-    map_res(
-        size_parser,
-        SizeUnit::try_from,
-    )(input)
+fn parse_operator(
+    (operator, expression_right): (&str, ExpressionNode),
+    expression_left: ExpressionNode,
+) -> ExpressionNode {
+    match operator {
+        "and" => ExpressionNode::And(
+            expression_left.boxed(),
+            expression_right.boxed(),
+        ),
+        "or" => ExpressionNode::Or(
+            expression_left.boxed(),
+            expression_right.boxed(),
+        ),
+        _ => panic!("Unknown operator: {operator}"),
+    }
 }
 
-#[rustfmt::skip]
-fn key_value(input: &str) {
 
+pub fn parse_root(input: &str) -> Result<ExpressionNode, GenericError> {
+    let (remainder, expression) = parse_or(input)?;
+    if !remainder.trim().is_empty() {
+        return Err(GenericError::SomeTokensWereNotParsed(
+            remainder.to_string(),
+        ));
+    }
 
+    Ok(expression)
 }
-
-#[rustfmt::skip]
-pub fn root() {}
 
 #[cfg(test)]
 mod test {
+    use chrono::Duration;
+    use regex::Regex;
+    use crate::parse::comparison::Comparison;
+    use crate::parse::file_type::FileType;
+    use crate::parse::filter::Filter;
+
     use super::*;
 
     #[test]
-    fn test_number() {
-        assert_eq!(number("-12_3_ "), Ok((" ", -123)));
+    fn test_parse_size() {
+        assert_eq!(
+            parse_attribute("size <= 1 B"),
+            Ok((
+                "",
+                ExpressionNode::Leaf(Filter::Size {
+                    value: 1,
+                    comparison: Comparison::Lte,
+                })
+            ))
+        );
 
-        match number("-12_3_ ") {
-            Ok(qwe) => {
-                println!("{:?}", qwe);
-            }
-            Err(e) => match e {
-                Err::Incomplete(needed) => println!("Incomplete {:?}", needed),
-                Err::Error(error) => println!("Error"),
-                Err::Failure(error) => println!("Failure"),
-            },
-        }
+        assert_eq!(
+            parse_attribute(" size != 10B"),
+            Ok((
+                "",
+                ExpressionNode::Leaf(Filter::Size {
+                    value: 10,
+                    comparison: Comparison::Neq,
+                })
+            ))
+        );
     }
 
     #[test]
-    fn test_comparison() {
-        assert_eq!(comparison("<=<="), Ok(("<=", Comparison::Lte)));
-        assert_eq!(comparison("<"), Ok(("", Comparison::Lt)));
-        assert_eq!(comparison(">="), Ok(("", Comparison::Gte)));
-        assert_eq!(comparison(">"), Ok(("", Comparison::Gt)));
-        assert_eq!(comparison("="), Ok(("", Comparison::Eq)));
-        assert_eq!(comparison("!="), Ok(("", Comparison::Neq)));
+    fn test_parse_time() {
+        assert_eq!(
+            parse_attribute("mtime <= now - 2d"),
+            Ok((
+                "",
+                ExpressionNode::Leaf(Filter::ModificationTime {
+                    value: Duration::days(-2),
+                    comparison: Comparison::Lte,
+                })
+            ))
+        );
+
+        assert_eq!(
+            parse_attribute("atime <= now - 2d"),
+            Ok((
+                "",
+                ExpressionNode::Leaf(Filter::AccessTime {
+                    value: Duration::days(-2),
+                    comparison: Comparison::Lte,
+                })
+            ))
+        );
     }
 
     #[test]
-    fn size_test() {
-        assert_eq!(size("42 Mb"), Ok(("", SizeUnit::Mb(42))));
-        assert_eq!(size("42Mb"), Ok(("", SizeUnit::Mb(42))));
-        assert_eq!(size("42"), Ok(("", SizeUnit::Byte(42))));
+    fn test_parse_name() {
+        assert_eq!(
+            parse_attribute("name = '.*sa mple*.json'"),
+            Ok((
+                "",
+                ExpressionNode::Leaf(Filter::Name {
+                    value: globset::Glob::new(".*sa mple*.json").unwrap().into(),
+                    comparison: Comparison::Eq,
+                })
+            ))
+        );
+
+        assert_eq!(
+            parse_attribute("contains != r'пример.json' remainder"),
+            Ok((
+                " remainder",
+                ExpressionNode::Leaf(Filter::Contains {
+                    value: Regex::new("пример.json").unwrap().into(),
+                    comparison: Comparison::Neq,
+                })
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_depth() {
+        assert_eq!(
+            parse_attribute("depth != 2"),
+            Ok((
+                "",
+                ExpressionNode::Leaf(Filter::Depth {
+                    value: 2,
+                    comparison: Comparison::Neq,
+                })
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_file_type() {
+        assert_eq!(
+            parse_attribute("type != vid"),
+            Ok((
+                "",
+                ExpressionNode::Leaf(Filter::Type {
+                    value: FileType::Video,
+                    comparison: Comparison::Neq,
+                })
+            ))
+        );
+    }
+
+    #[test]
+    fn parse_sample_1() {
+        let input = "name = aaaa and mtime <= now - 1d and size <= 1B and not (not type = vid and size >= 2B or size != 3B) or size = 4B";
+        let result = parse_root(input);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parse_sample_2() {
+        let input = "name = .*sample.*' and not (name = '.*.xml' or name = '.*.html')";
+        let result = parse_root(input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parse_sample_3() {
+        let input = "name=*s* and perm=777 or (name=*rs and contains = *birth*)";
+        let result = parse_root(input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parse_sample_4() {
+        let input = "name=*s* and perm=777 or (   name=*rs and contains = *birth*  )";
+        let result = parse_root(input);
+        assert!(result.is_ok());
     }
 }

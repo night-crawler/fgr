@@ -3,15 +3,30 @@ name = "fgr"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 nom = "7"
+nom-unicode = "0.3"
 thiserror = "1"
 strum = "0.24"
 strum_macros = "0.24"
+lazy_static = "1.4"
+chrono = "0.4"
+itertools = "0.10"
+dot-writer = "0.1.2"
+ignore = "0.4"
+regex = "1"
+globset = "0.4"
+kanal = "0.1.0-beta2"
+num_cpus = "1.13"
+ctrlc = "3.2"
+clap = { version = "4.0.16", features = ["derive", "color", "suggestions"] }
+users = "0.11"
+unix_mode = "0.1"
+infer = "0.9"
 
+[dev-dependencies]
+tempfile = "3"
 
-[lib]
-name = "parser"
-path = "src/parse/mod.rs"
+[profile.release]
+lto = true
+codegen-units = 1
