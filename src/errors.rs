@@ -24,8 +24,8 @@ pub enum GenericError {
     #[error("Traversal error: {0}")]
     IgnoreError(#[from] ignore::Error),
 
-    #[error("Traversal error: {0}")]
-    NotAFile(PathBuf)
+    #[error("Not a file: {0}")]
+    NotAFile(PathBuf),
 }
 
 impl GenericError {

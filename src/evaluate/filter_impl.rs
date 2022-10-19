@@ -1,6 +1,8 @@
 use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::os::unix::prelude::PermissionsExt;
+
+use timeout_readwrite::TimeoutReader;
 
 use crate::errors::GenericError;
 use crate::evaluate::traits::DurationOffsetExt;
@@ -29,13 +31,19 @@ impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
                     return Ok(false);
                 }
 
-                let file_type: FileType =
-                    if let Some(file_type) = infer::get_from_path(entry.get_path())? {
-                        file_type.matcher_type()
-                    } else {
-                        return Ok(false);
-                    }
-                    .into();
+                let file = OpenOptions::new().read(true).open(entry.get_path())?;
+                let reader = TimeoutReader::new(file, std::time::Duration::from_secs(1));
+                let mut reader = BufReader::new(reader);
+
+                let mut buf = vec![0; entry.get_size().min(8192)];
+                reader.read_exact(&mut buf)?;
+
+                let file_type: FileType = if let Some(file_type) = infer::get(&buf) {
+                    file_type.matcher_type()
+                } else {
+                    return Ok(false);
+                }
+                .into();
 
                 let mut result = &file_type == value;
                 if comparison != &Comparison::Eq {
@@ -77,11 +85,21 @@ impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
                     return Ok(false);
                 }
                 let file = OpenOptions::new().read(true).open(entry.get_path())?;
+                let reader = TimeoutReader::new(file, std::time::Duration::from_secs(1));
+                let reader = BufReader::new(reader);
 
-                let reader = BufReader::new(file);
-                let result = reader.lines().flatten().any(|line| value.is_match(&line));
-
-                Ok(comparison.evaluate(result, true))
+                for line in reader.lines() {
+                    match line {
+                        Ok(line) if value.is_match(&line) => {
+                            return Ok(comparison.evaluate(true, true))
+                        }
+                        Err(err) => {
+                            return Err(err.into());
+                        }
+                        _ => continue,
+                    }
+                }
+                Ok(false)
             }
             Self::User { value, comparison } => {
                 Ok(comparison.evaluate(entry.get_user_id()?, *value))
@@ -180,7 +198,7 @@ mod tests {
         let mut file = tempfile::NamedTempFile::new().unwrap();
         write!(file, "<html>").unwrap();
         file.flush().unwrap();
-        entry = entry.set_file(file.path().into());
+        entry = entry.set_file(file.path().into()).set_size("<html>".len());
 
         let result = filter.evaluate(&entry);
         assert!(result.is_ok());
@@ -223,7 +241,10 @@ mod tests {
 
     #[test]
     fn test_extension() {
-        let filter = Filter::Extension { value: globset::Glob::new("txt").unwrap().into(), comparison: Comparison::Eq };
+        let filter = Filter::Extension {
+            value: globset::Glob::new("txt").unwrap().into(),
+            comparison: Comparison::Eq,
+        };
         let mut entry = DirEntryMock::default().set_file("long_sample_long.txt".into());
 
         let result = filter.evaluate(&entry);
@@ -238,10 +259,15 @@ mod tests {
 
     #[test]
     fn test_contains() {
-        let filter = Filter::Contains { value: globset::Glob::new("*amp*").unwrap().into(), comparison: Comparison::Eq };
+        let filter = Filter::Contains {
+            value: globset::Glob::new("*amp*").unwrap().into(),
+            comparison: Comparison::Eq,
+        };
         let mut file = tempfile::NamedTempFile::new().unwrap();
 
-        let entry = DirEntryMock::default().set_file(file.path().to_path_buf()).set_entry_type(EntryType::File);
+        let entry = DirEntryMock::default()
+            .set_file(file.path().to_path_buf())
+            .set_entry_type(EntryType::File);
 
         let result = filter.evaluate(&entry);
         assert!(result.is_ok());
@@ -285,7 +311,10 @@ mod tests {
         let file = tempfile::NamedTempFile::new().unwrap();
         let permissions = file.as_file().metadata().unwrap().permissions();
 
-        let filter = Filter::Permissions { value: permissions.clone(), comparison: Comparison::Lte };
+        let filter = Filter::Permissions {
+            value: permissions.clone(),
+            comparison: Comparison::Lte,
+        };
         let entry = DirEntryMock::default().set_permissions(permissions);
 
         let result = filter.evaluate(&entry);

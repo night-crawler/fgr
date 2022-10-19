@@ -170,7 +170,7 @@ version = "3.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d91974fbbe88ec1df0c24a4f00f99583667a7e2e6272b2b92d294d81e462173"
 dependencies = [
- "nix",
+ "nix 0.25.0",
  "winapi",
 ]
 
@@ -254,13 +254,13 @@ dependencies = [
  "kanal",
  "lazy_static",
  "nom",
- "nom-unicode",
  "num_cpus",
  "regex",
  "strum",
  "strum_macros",
  "tempfile",
  "thiserror",
+ "timeout-readwrite",
  "unix_mode",
  "users",
 ]
@@ -379,9 +379,8 @@ dependencies = [
 
 [[package]]
 name = "kanal"
-version = "0.1.0-pre1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bec74d6fb49fafe0f1c3c168a9e793e363a5a2be763c52c564c76bc45b5c22fb"
+version = "0.1.0-pre2"
+source = "git+https://github.com/fereidani/kanal#d45014b8294130c127eea03b208f3b008026c1a9"
 dependencies = [
  "lock_api",
  "pin-project-lite",
@@ -434,10 +433,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
+name = "memoffset"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
+name = "nix"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f866317acbd3a240710c63f065ffb1e4fd466259045ccb504130b7f668f35c6"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if",
+ "libc",
+ "memoffset",
+]
 
 [[package]]
 name = "nix"
@@ -459,15 +480,6 @@ checksum = "a8903e5a29a317527874d0402f867152a3d21c908bb0b933e416c65e301d4c36"
 dependencies = [
  "memchr",
  "minimal-lexical",
-]
-
-[[package]]
-name = "nom-unicode"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5c03a4d71ab9740c752c165329e9df13a808093b146dfbef6170ac260771ffe"
-dependencies = [
- "nom",
 ]
 
 [[package]]
@@ -718,6 +730,15 @@ dependencies = [
  "libc",
  "wasi",
  "winapi",
+]
+
+[[package]]
+name = "timeout-readwrite"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61e9b6279ee83562e5f8ac37bbd4ca032016616c9f5688b0d1b7775619619dce"
+dependencies = [
+ "nix 0.23.1",
 ]
 
 [[package]]

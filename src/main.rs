@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ignore::WalkBuilder;
 
@@ -47,17 +47,19 @@ fn main() {
     config.git_ignore.map(|yes| builder.git_ignore(yes));
     config.git_global.map(|yes| builder.git_global(yes));
     config.git_exclude.map(|yes| builder.git_exclude(yes));
+    config.same_filesystem.map(|yes| builder.same_file_system(yes));
 
     builder.threads(config.threads);
 
     let walk = builder.build_parallel();
 
     let (sender, receiver) = kanal::unbounded();
-    let status = Arc::new(ProcessStatus::InProgress);
+    let status = Arc::new(Mutex::new(ProcessStatus::InProgress));
 
     set_int_handler(&status);
 
     spawn_senders(&status, &root_node, sender, walk);
+
     let handle = spawn_receiver(&status, receiver);
 
     let status = handle.join().unwrap();

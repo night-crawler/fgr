@@ -50,7 +50,7 @@ fn parse_not(input: &str) -> IResult<&str, ExpressionNode> {
             parse_attribute,
             parse_parens_or_attribute
         )),
-        |expression| ExpressionNode::Not(expression.boxed()),
+        |expression| ExpressionNode::Not(expression.into()),
     )(input)
 }
 
@@ -94,12 +94,12 @@ fn parse_operator(
 ) -> ExpressionNode {
     match operator {
         "and" => ExpressionNode::And(
-            expression_left.boxed(),
-            expression_right.boxed(),
+            expression_left.into(),
+            expression_right.into(),
         ),
         "or" => ExpressionNode::Or(
-            expression_left.boxed(),
-            expression_right.boxed(),
+            expression_left.into(),
+            expression_right.into(),
         ),
         _ => panic!("Unknown operator: {operator}"),
     }

@@ -41,7 +41,7 @@ Examples:
 
     Other examples:
     fgr /home /bin -e 'name=*s* and perm=777 or (name=*rs and contains=r".+user.is_birthday.*")'
-    fgr /home /bin -e 'name=*s* and perm=777 or (name=*rs and contains=*birth*)
+    fgr /home /bin -e 'name=*s* and perm=777 or (name=*rs and contains=*birth*)'
     fgr /home /bin -e 'ext=so and mtime >= now - 1d'
     fgr /home -e 'size>=1Mb and name != *.rs and type=vid'
 "###)]
@@ -87,6 +87,10 @@ pub struct Args {
     /// Read .git/info/exclude
     #[arg(long)]
     read_git_exclude: Option<bool>,
+
+    /// Same filesystem
+    #[arg(long)]
+    same_filesystem: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -103,6 +107,8 @@ pub struct Config {
     pub git_ignore: Option<bool>,
     pub git_global: Option<bool>,
     pub git_exclude: Option<bool>,
+
+    pub same_filesystem: Option<bool>,
 
     pub print_expression_tree: bool,
 }
@@ -132,6 +138,8 @@ impl Config {
             git_ignore: args.read_git_ignore,
             git_global: args.read_git_global,
             git_exclude: args.read_git_exclude,
+
+            same_filesystem: args.same_filesystem,
 
             print_expression_tree: args.print_expression_tree,
         })

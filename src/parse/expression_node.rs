@@ -9,10 +9,6 @@ pub enum ExpressionNode {
 }
 
 impl ExpressionNode {
-    pub fn boxed(self) -> Box<Self> {
-        Box::new(self)
-    }
-
     pub fn negate(&mut self) {
         match self {
             ExpressionNode::Leaf(filter) => filter.negate(),
@@ -31,6 +27,7 @@ impl ExpressionNode {
     /// Applies De Morgan's law to the original tree.
     /// We are trying to get rid of all possible OR expressions in favour of AND,
     /// wo we could join multiple nested ANDs with the root level.
+    /// WARNING WARNING: IT DOES NOT WORK
     pub fn optimize(self) -> ExpressionNode {
         match self {
             filter @ ExpressionNode::Leaf(_) => filter,
@@ -38,20 +35,20 @@ impl ExpressionNode {
             // Trivial case: the root node we have is AND. Optimize left and right branches and return
             // the node as is.
             ExpressionNode::And(left, right) => ExpressionNode::And(
-                (*left).optimize().boxed(),
-                (*right).optimize().boxed(),
+                left.optimize().into(),
+                right.optimize().into(),
             ),
 
             // The root not is OR. Apply the law in a manner:
             // if a == 1 || b == 37 {}
             // if !(a != 1 && b != 37) {}
             ExpressionNode::Or(left, right) => {
-                let mut left = (*left).optimize().boxed();
-                let mut right = (*right).optimize().boxed();
+                let mut left: Box<ExpressionNode> = left.optimize().into();
+                let mut right: Box<ExpressionNode> = right.optimize().into();
                 left.negate();
                 right.negate();
 
-                ExpressionNode::Not(ExpressionNode::And(left, right).boxed())
+                ExpressionNode::Not(ExpressionNode::And(left, right).into())
             }
 
             // The root not is NOT. We need to check the underlying expression first:
@@ -69,10 +66,10 @@ impl ExpressionNode {
                     ExpressionNode::And(left, right) => {
                         // if !(a == 1 && b == 37) {}
                         // if a != 1 || b != 37 {}
-                        let left = (*left).optimize().boxed();
-                        let right = (*right).optimize().boxed();
+                        let left = left.optimize().into();
+                        let right = right.optimize().into();
                         ExpressionNode::Not(
-                            ExpressionNode::And(left, right).boxed(),
+                            ExpressionNode::And(left, right).into(),
                         )
                     }
 
@@ -80,13 +77,13 @@ impl ExpressionNode {
                     // if !(a == 1 || b == 37) {}
                     // if a != 1 && b != 37 {}
                     ExpressionNode::Or(left, right) => {
-                        let left = (*left).optimize().boxed();
-                        let mut right = (*right).optimize().boxed();
+                        let left = left.optimize().into();
+                        let mut right: Box<ExpressionNode> = right.optimize().into();
                         // left.negate();
                         right.negate();
 
                         ExpressionNode::And(
-                            ExpressionNode::Not(left).boxed(),
+                            ExpressionNode::Not(left).into(),
                             right,
                         )
                     }
