@@ -19,6 +19,7 @@ pub mod walk;
 
 #[cfg(test)]
 pub mod test_utils;
+pub mod r#macro;
 
 fn main() {
     let config = match Config::build() {

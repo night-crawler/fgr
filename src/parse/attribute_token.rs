@@ -11,7 +11,6 @@ use nom::combinator::{map, map_res, opt};
 use nom::error::ErrorKind;
 use nom::sequence::terminated;
 use nom::IResult;
-use strum_macros::{EnumIter, EnumString};
 use users::{Groups, Users, UsersCache};
 
 use crate::parse::comparison::Comparison;
@@ -21,14 +20,14 @@ use crate::parse::primitives::{
     parse_comparison, parse_duration, parse_file_type, parse_pattern,
     parse_positive_number, parse_size_unit,
 };
-use crate::parse::traits::{AliasExt, GenericParser};
-use crate::parse::util::{prepare_enum_map, split_by_longest_alias, ws};
-use crate::GenericError;
+use crate::parse::traits::GenericParser;
+use crate::parse::util::{prepare_enum_map, ws};
+use crate::{mk_filter_enum, GenericError};
 
 lazy_static! {
     static ref SORTED_IDENTIFIERS: BTreeMap<&'static str, &'static str> =
         prepare_enum_map::<AttributeToken>();
-    
+
     // SAFETY: We will not share the UserCache instance and use it once while parsing a query
     // in the main thread
     static ref USERS: UnsafeWrapper<UsersCache> = unsafe {
@@ -57,42 +56,19 @@ impl<T> UnsafeWrapper<T> {
 unsafe impl<T> Send for UnsafeWrapper<T> {}
 unsafe impl<T> Sync for UnsafeWrapper<T> {}
 
-#[derive(Debug, Eq, PartialEq, EnumIter, EnumString, Clone)]
-pub enum AttributeToken {
-    Name,
-    ModificationTime,
-    AccessTime,
-    Size,
-    Extension,
-    Contains,
-    Depth,
-    Permissions,
-    Group,
-    User,
-    Type,
-}
-
-impl AliasExt for AttributeToken {
-    fn get_aliases(&self) -> (&'static [&'static str], &'static str) {
-        match self {
-            Self::Name => (&["name"][..], "Name"),
-            Self::ModificationTime => (&["mtime"][..], "ModificationTime"),
-            Self::AccessTime => (&["atime"][..], "AccessTime"),
-            Self::Size => (&["size"][..], "Size"),
-            Self::Extension => (&["extension", "ext"][..], "Extension"),
-            Self::Contains => (&["contains"][..], "Contains"),
-            Self::Depth => (&["depth"][..], "Depth"),
-            Self::Permissions => (&["permissions", "perm", "perms"][..], "Permissions"),
-            Self::Group => (&["group"][..], "Group"),
-            Self::User => (&["user"][..], "User"),
-            Self::Type => (&["type"][..], "Type"),
-        }
-    }
-
-    fn split_by_longest_alias(input: &str) -> Option<(&str, &str)> {
-        split_by_longest_alias(input, SORTED_IDENTIFIERS.iter().rev())
-    }
-}
+mk_filter_enum!(AttributeToken, ATTRIBUTE_TOKEN_ALIASES, [
+    Name: "name",
+    ModificationTime: "mtime",
+    AccessTime: "atime",
+    Size: "size",
+    Extension: "ext", "extension",
+    Contains: "contains",
+    Depth: "depth",
+    Permissions: "permissions", "perms", "perm",
+    Group: "group",
+    User: "user",
+    Type: "type"
+]);
 
 fn parse_comparison_and_pattern(
     input: &str,
