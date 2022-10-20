@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
-use infer::MatcherType;
 
+use infer::MatcherType;
 use lazy_static::lazy_static;
 use strum_macros::EnumIter;
 use strum_macros::EnumString;
@@ -26,7 +26,7 @@ pub enum FileType {
     Image,
     Text,
     Video,
-    Custom
+    Custom,
 }
 
 impl AliasExt for FileType {

@@ -1,8 +1,10 @@
 use std::ops::{Neg, Sub};
 use std::time::SystemTime;
+
 use chrono::Duration;
-use crate::GenericError;
+
 use crate::walk::traits::DirEntryWrapperExt;
+use crate::GenericError;
 
 pub trait Evaluate<E: DirEntryWrapperExt> {
     fn evaluate(&self, entry: &E) -> Result<bool, GenericError>;

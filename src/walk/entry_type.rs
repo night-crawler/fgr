@@ -8,5 +8,5 @@ pub enum EntryType {
     BlockDevice,
     CharDevice,
     FIFO,
-    Unknown
+    Unknown,
 }

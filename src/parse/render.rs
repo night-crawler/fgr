@@ -2,11 +2,7 @@ use dot_writer::{Attributes, DotWriter, NodeId, Scope};
 
 use crate::parse::expression_node::ExpressionNode;
 
-fn traverse(
-    scope: &mut Scope,
-    root: &ExpressionNode,
-    counter: &mut usize,
-) -> NodeId {
+fn traverse(scope: &mut Scope, root: &ExpressionNode, counter: &mut usize) -> NodeId {
     let current = *counter;
     *counter += 1;
 

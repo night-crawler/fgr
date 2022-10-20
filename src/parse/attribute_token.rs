@@ -13,7 +13,6 @@ use nom::sequence::terminated;
 use nom::IResult;
 use strum_macros::{EnumIter, EnumString};
 use users::{Groups, Users, UsersCache};
-use crate::GenericError;
 
 use crate::parse::comparison::Comparison;
 use crate::parse::filter::Filter;
@@ -24,14 +23,18 @@ use crate::parse::primitives::{
 };
 use crate::parse::traits::{AliasExt, GenericParser};
 use crate::parse::util::{prepare_enum_map, split_by_longest_alias, ws};
+use crate::GenericError;
 
 lazy_static! {
     static ref SORTED_IDENTIFIERS: BTreeMap<&'static str, &'static str> =
         prepare_enum_map::<AttributeToken>();
-    static ref USERS: UnsafeWrapper<UsersCache> = UnsafeWrapper::new(UsersCache::new());
-    static ref GROUPS: UnsafeWrapper<UsersCache> = UnsafeWrapper::new(UsersCache::new());
+    
+    // SAFETY: We will not share the UserCache instance and use it once while parsing a query
+    // in the main thread
+    static ref USERS: UnsafeWrapper<UsersCache> = unsafe {
+        UnsafeWrapper::new(UsersCache::new())
+    };
 }
-
 
 struct UnsafeWrapper<T> {
     inner: T,
@@ -46,7 +49,7 @@ impl<T> Deref for UnsafeWrapper<T> {
 }
 
 impl<T> UnsafeWrapper<T> {
-    fn new(inner: T) -> Self {
+    unsafe fn new(inner: T) -> Self {
         Self { inner }
     }
 }
@@ -115,8 +118,7 @@ fn filter_eq_neq(input: &str, comparison: Comparison) -> IResult<&str, Compariso
 }
 
 fn get_user(name: &str) -> Result<u32, GenericError> {
-    if let Some(value) = USERS.get_user_by_name(name).map(|user| user.uid() as u32)
-    {
+    if let Some(value) = USERS.get_user_by_name(name).map(|user| user.uid() as u32) {
         return Ok(value);
     }
 
@@ -124,26 +126,20 @@ fn get_user(name: &str) -> Result<u32, GenericError> {
 }
 
 fn get_group(name: &str) -> Result<u32, GenericError> {
-    if let Some(value) = USERS.get_group_by_name(name).map(|user| user.gid() as u32)
-    {
+    if let Some(value) = USERS.get_group_by_name(name).map(|user| user.gid() as u32) {
         return Ok(value);
     }
 
     Err(GenericError::WrongTokenType(name.to_string()))
 }
 
-fn parse_user_or_group(f: fn(&str) -> Result<u32, GenericError>) -> impl FnMut(&str) -> IResult<&str, u32> {
-    move |input: &str|  {
-        alt((
-            map(
-                parse_positive_number,
-                |num| num as u32
-            ),
-            map_res(
-                alphanumeric1,
-                f
-            )
-        ))(input)
+fn parse_user_or_group(
+    f: fn(&str) -> Result<u32, GenericError>,
+) -> impl FnMut(&str) -> IResult<&str, u32> {
+    move |input: &str| {
+        alt((map(parse_positive_number, |num| num as u32), map_res(alphanumeric1, f)))(
+            input,
+        )
     }
 }
 
@@ -209,15 +205,13 @@ impl GenericParser for AttributeToken {
             AttributeToken::Permissions => {
                 let (input, comparison) = parse_comparison(input)?;
 
-                let (input, mode) = map_res(
-                    ws(digit1),
-                    |value| u32::from_str_radix(value, 8)
-                )(input)?;
+                let (input, mode) =
+                    map_res(ws(digit1), |value| u32::from_str_radix(value, 8))(input)?;
 
                 let value = Permissions::from_mode(mode);
 
                 (input, Filter::Permissions { value, comparison })
-            },
+            }
             AttributeToken::Type => {
                 let (input, comparison) = parse_comparison(input)?;
                 let (input, value) = ws(parse_file_type)(input)?;

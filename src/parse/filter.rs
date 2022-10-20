@@ -9,7 +9,6 @@ use crate::parse::comparison::Comparison;
 use crate::parse::file_type::FileType;
 use crate::parse::match_pattern::MatchPattern;
 
-
 #[derive(Eq, PartialEq, IntoStaticStr)]
 pub enum Filter {
     Size { value: usize, comparison: Comparison },
@@ -27,7 +26,7 @@ pub enum Filter {
 
     User { value: u32, comparison: Comparison },
     Group { value: u32, comparison: Comparison },
-    Permissions { value: Permissions, comparison: Comparison }
+    Permissions { value: Permissions, comparison: Comparison },
 }
 
 impl Filter {
@@ -43,7 +42,7 @@ impl Filter {
             Self::Contains { comparison, .. } => comparison.negate(),
             Self::User { comparison, .. } => comparison.negate(),
             Self::Group { comparison, .. } => comparison.negate(),
-            Self::Permissions { comparison, .. } => comparison.negate()
+            Self::Permissions { comparison, .. } => comparison.negate(),
         }
     }
 }

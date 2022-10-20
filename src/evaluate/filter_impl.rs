@@ -2,6 +2,8 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Read};
 use std::os::unix::prelude::PermissionsExt;
 
+use globset::GlobMatcher;
+use lazy_static::lazy_static;
 use timeout_readwrite::TimeoutReader;
 
 use crate::errors::GenericError;
@@ -13,6 +15,11 @@ use crate::parse::filter::Filter;
 use crate::walk::entry_type::EntryType;
 use crate::walk::traits::DirEntryWrapperExt;
 use crate::Evaluate;
+
+lazy_static! {
+    static ref PAGEMAP_FILTER: GlobMatcher =
+        globset::Glob::new("/proc/**/pagemap").unwrap().compile_matcher();
+}
 
 impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
     fn evaluate(&self, entry: &E) -> Result<bool, GenericError> {
@@ -84,7 +91,15 @@ impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
                 if entry.get_entry_type() != EntryType::File {
                     return Ok(false);
                 }
-                let file = OpenOptions::new().read(true).open(entry.get_path())?;
+
+                let path = entry.get_path();
+
+                // skip pagemap because OOM Killer will NOT end our misery
+                if PAGEMAP_FILTER.is_match(path) {
+                    return Ok(false);
+                }
+
+                let file = OpenOptions::new().read(true).open(path)?;
                 let reader = TimeoutReader::new(file, std::time::Duration::from_secs(1));
                 let reader = BufReader::new(reader);
 

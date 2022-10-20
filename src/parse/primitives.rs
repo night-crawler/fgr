@@ -210,7 +210,7 @@ mod test_primitives {
 
     #[test]
     fn test_parse_size_unit() {
-        assert_eq!(parse_size_unit("kilobyte"), Ok(("", SizeUnit::Kilobyte)));
+        assert_eq!(parse_size_unit("Kb"), Ok(("", SizeUnit::Kilobyte)));
         assert!(parse_size_unit("k").is_err());
 
         assert_eq!(parse_size_unit("B"), Ok(("", SizeUnit::Byte)));
@@ -247,7 +247,6 @@ mod test_primitives {
         assert_eq!(parse_glob_pattern(r"sample?*="), Ok(("", g("sample?*="))));
 
         assert_eq!(parse_glob_pattern("\"a json\""), Ok(("", g("a json"))));
-
     }
 
     #[test]
@@ -261,18 +260,11 @@ mod test_primitives {
             Ok(("", r(r"sample.+привет.+")))
         );
 
-        assert_eq!(
-            parse_regex_pattern(r##"r"sample.+""##),
-            Ok(("", r(r"sample.+")))
-        );
+        assert_eq!(parse_regex_pattern(r##"r"sample.+""##), Ok(("", r(r"sample.+"))));
     }
 
     #[test]
     fn test_parse_pattern_till_first_space() {
-        assert_eq!(
-            parse_pattern_till_first_space("sample"),
-            Ok(("", "sample"))
-        );
-
+        assert_eq!(parse_pattern_till_first_space("sample"), Ok(("", "sample")));
     }
 }

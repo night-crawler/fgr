@@ -1,9 +1,8 @@
-
 use nom::multi::many0;
 use nom::sequence::tuple;
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::char,
-    combinator::map, sequence::delimited, IResult,
+    branch::alt, bytes::complete::tag, character::complete::char, combinator::map,
+    sequence::delimited, IResult,
 };
 
 use crate::errors::GenericError;
@@ -18,13 +17,13 @@ pub mod comparison;
 pub mod expression_node;
 pub mod file_type;
 pub mod filter;
+pub mod match_pattern;
 pub mod primitives;
 pub mod render;
 pub mod size_unit;
 pub mod time_unit;
 pub mod traits;
 pub mod util;
-pub mod match_pattern;
 
 fn parse_attribute(input: &str) -> IResult<&str, ExpressionNode> {
     let (input, attribute) = parse_attribute_name(input)?;
@@ -93,25 +92,16 @@ fn parse_operator(
     expression_left: ExpressionNode,
 ) -> ExpressionNode {
     match operator {
-        "and" => ExpressionNode::And(
-            expression_left.into(),
-            expression_right.into(),
-        ),
-        "or" => ExpressionNode::Or(
-            expression_left.into(),
-            expression_right.into(),
-        ),
+        "and" => ExpressionNode::And(expression_left.into(), expression_right.into()),
+        "or" => ExpressionNode::Or(expression_left.into(), expression_right.into()),
         _ => panic!("Unknown operator: {operator}"),
     }
 }
 
-
 pub fn parse_root(input: &str) -> Result<ExpressionNode, GenericError> {
     let (remainder, expression) = parse_or(input)?;
     if !remainder.trim().is_empty() {
-        return Err(GenericError::SomeTokensWereNotParsed(
-            remainder.to_string(),
-        ));
+        return Err(GenericError::SomeTokensWereNotParsed(remainder.to_string()));
     }
 
     Ok(expression)
@@ -121,6 +111,7 @@ pub fn parse_root(input: &str) -> Result<ExpressionNode, GenericError> {
 mod test {
     use chrono::Duration;
     use regex::Regex;
+
     use crate::parse::comparison::Comparison;
     use crate::parse::file_type::FileType;
     use crate::parse::filter::Filter;

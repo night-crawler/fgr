@@ -5,25 +5,25 @@ use std::fs::Permissions;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::GenericError;
 use crate::walk::entry_type::EntryType;
 use crate::walk::traits::DirEntryWrapperExt;
+use crate::GenericError;
 
 #[derive(Default)]
 pub(crate) struct DirEntryMock {
-   pub(crate) entry_type: Option<EntryType>,
-   pub(crate) file: Option<PathBuf>,
-   pub(crate) size: Option<usize>,
-   pub(crate) depth: Option<usize>,
+    pub(crate) entry_type: Option<EntryType>,
+    pub(crate) file: Option<PathBuf>,
+    pub(crate) size: Option<usize>,
+    pub(crate) depth: Option<usize>,
 
-   pub(crate) user_id: Option<u32>,
-   pub(crate) group_id: Option<u32>,
+    pub(crate) user_id: Option<u32>,
+    pub(crate) group_id: Option<u32>,
 
-   pub(crate) mtime: Option<SystemTime>,
-   pub(crate) atime: Option<SystemTime>,
-   pub(crate) btime: Option<SystemTime>,
+    pub(crate) mtime: Option<SystemTime>,
+    pub(crate) atime: Option<SystemTime>,
+    pub(crate) btime: Option<SystemTime>,
 
-   pub(crate) permissions: Option<Permissions>
+    pub(crate) permissions: Option<Permissions>,
 }
 
 impl DirEntryMock {
@@ -137,6 +137,4 @@ impl DirEntryWrapperExt for DirEntryMock {
             Err(GenericError::UnknownCommand("sample".to_string()))
         }
     }
-
-
 }

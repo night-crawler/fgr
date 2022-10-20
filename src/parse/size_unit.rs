@@ -17,16 +17,18 @@ pub enum SizeUnit {
     Byte,
     Kilobyte,
     Megabyte,
+    Gigabyte,
     Terabyte,
 }
 
 impl SizeUnit {
     pub fn to_bytes(&self, value: usize) -> usize {
         match self {
-            SizeUnit::Byte => value,
-            SizeUnit::Kilobyte => value * 1000,
-            SizeUnit::Megabyte => value * 1000 * 1000,
-            SizeUnit::Terabyte => value * 1000 * 1000 * 1000,
+            Self::Byte => value,
+            Self::Kilobyte => value * 1000,
+            Self::Megabyte => value * 1000 * 1000,
+            Self::Gigabyte => value * 1000 * 1000 * 1000,
+            Self::Terabyte => value * 1000 * 1000 * 1000 * 1000,
         }
     }
 }
@@ -35,9 +37,10 @@ impl AliasExt for SizeUnit {
     fn get_aliases(&self) -> (&'static [&'static str], &'static str) {
         match self {
             SizeUnit::Byte => (&["B", "byte", "bytes"][..], "Byte"),
-            SizeUnit::Kilobyte => (&["Kb", "kilobyte"][..], "Kilobyte"),
-            SizeUnit::Megabyte => (&["Mb"][..], "Megabyte"),
-            SizeUnit::Terabyte => (&["Tb"][..], "Terabyte"),
+            SizeUnit::Kilobyte => (&["Kb", "K"][..], "Kilobyte"),
+            SizeUnit::Megabyte => (&["Mb", "M"][..], "Megabyte"),
+            SizeUnit::Gigabyte => (&["Gb", "G"][..], "Gigabyte"),
+            SizeUnit::Terabyte => (&["Tb", "T"][..], "Terabyte"),
         }
     }
 

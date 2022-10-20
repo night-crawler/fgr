@@ -4,9 +4,12 @@ use clap::Parser;
 
 use crate::{parse_root, ExpressionNode, GenericError};
 
-
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about=r###"fgr: find & grep program.
+#[command(
+    author,
+    version,
+    about,
+    long_about = r###"fgr: find & grep program.
 
 You can build complex query expressions in the form of:
     (FILTER1 op FILTER2) or FILTER3
@@ -44,7 +47,8 @@ Examples:
     fgr /home /bin -e 'name=*s* and perm=777 or (name=*rs and contains=*birth*)'
     fgr /home /bin -e 'ext=so and mtime >= now - 1d'
     fgr /home -e 'size>=1Mb and name != *.rs and type=vid'
-"###)]
+"###
+)]
 pub struct Args {
     /// A list of directories where to search
     start_dirs: Option<Vec<String>>,
@@ -54,7 +58,7 @@ pub struct Args {
     expression: String,
 
     /// Print expression tree graphviz schema and exit
-    #[arg(short='q', long, default_value_t = false)]
+    #[arg(short = 'q', long, default_value_t = false)]
     print_expression_tree: bool,
 
     #[arg(short, long, default_value_t = num_cpus::get())]

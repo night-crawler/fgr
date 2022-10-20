@@ -34,10 +34,9 @@ impl ExpressionNode {
 
             // Trivial case: the root node we have is AND. Optimize left and right branches and return
             // the node as is.
-            ExpressionNode::And(left, right) => ExpressionNode::And(
-                left.optimize().into(),
-                right.optimize().into(),
-            ),
+            ExpressionNode::And(left, right) => {
+                ExpressionNode::And(left.optimize().into(), right.optimize().into())
+            }
 
             // The root not is OR. Apply the law in a manner:
             // if a == 1 || b == 37 {}
@@ -68,9 +67,7 @@ impl ExpressionNode {
                         // if a != 1 || b != 37 {}
                         let left = left.optimize().into();
                         let right = right.optimize().into();
-                        ExpressionNode::Not(
-                            ExpressionNode::And(left, right).into(),
-                        )
+                        ExpressionNode::Not(ExpressionNode::And(left, right).into())
                     }
 
                     // We are handling the NOT(OR(left, right)) case. We can make it AND using the law:
@@ -82,10 +79,7 @@ impl ExpressionNode {
                         // left.negate();
                         right.negate();
 
-                        ExpressionNode::And(
-                            ExpressionNode::Not(left).into(),
-                            right,
-                        )
+                        ExpressionNode::And(ExpressionNode::Not(left).into(), right)
                     }
 
                     // NOT(NOT(expression)) case. We just return the underlying expression.
