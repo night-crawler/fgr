@@ -130,6 +130,9 @@ impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
                 Ok(comparison
                     .evaluate(file_permissions.mode() & mask, value.mode() & mask))
             }
+
+            #[cfg(test)]
+            Self::Bool { value, comparison } => Ok(comparison.evaluate(true, *value)),
         }
     }
 }
@@ -333,6 +336,16 @@ mod tests {
         let entry = DirEntryMock::default().set_permissions(permissions);
 
         let result = filter.evaluate(&entry);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_bool() {
+        let filter = Filter::Bool { value: true, comparison: Comparison::Eq };
+
+        // does not depend on entry values
+        let result = filter.evaluate(&DirEntryMock::default().set_bool(true));
         assert!(result.is_ok());
         assert!(result.unwrap());
     }

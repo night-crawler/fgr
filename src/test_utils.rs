@@ -24,6 +24,8 @@ pub(crate) struct DirEntryMock {
     pub(crate) btime: Option<SystemTime>,
 
     pub(crate) permissions: Option<Permissions>,
+
+    pub(crate) bool: Option<bool>,
 }
 
 impl DirEntryMock {
@@ -65,6 +67,11 @@ impl DirEntryMock {
     }
     pub(crate) fn set_permissions(mut self, permissions: Permissions) -> Self {
         self.permissions = permissions.into();
+        self
+    }
+
+    pub(crate) fn set_bool(mut self, value: bool) -> Self {
+        self.bool = value.into();
         self
     }
 }
@@ -136,5 +143,10 @@ impl DirEntryWrapperExt for DirEntryMock {
         } else {
             Err(GenericError::UnknownCommand("sample".to_string()))
         }
+    }
+
+    #[cfg(test)]
+    fn get_bool(&self) -> bool {
+        unimplemented!()
     }
 }

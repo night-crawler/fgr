@@ -20,4 +20,7 @@ pub trait DirEntryWrapperExt {
     fn get_user_id(&self) -> Result<u32, GenericError>;
     fn get_group_id(&self) -> Result<u32, GenericError>;
     fn get_permissions(&self) -> Result<Permissions, GenericError>;
+
+    #[cfg(test)]
+    fn get_bool(&self) -> bool;
 }

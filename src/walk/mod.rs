@@ -75,4 +75,9 @@ impl DirEntryWrapperExt for DirEntry {
     fn get_permissions(&self) -> Result<Permissions, GenericError> {
         Ok(self.path().metadata()?.permissions())
     }
+
+    #[cfg(test)]
+    fn get_bool(&self) -> bool {
+        unimplemented!()
+    }
 }

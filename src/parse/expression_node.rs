@@ -9,86 +9,111 @@ pub enum ExpressionNode {
 }
 
 impl ExpressionNode {
-    pub fn negate(&mut self) {
+    pub fn negate(mut self) -> Self {
         match self {
-            ExpressionNode::Leaf(filter) => filter.negate(),
-            ExpressionNode::And(left, right) => {
-                left.negate();
-                right.negate();
+            Self::Leaf(ref mut filter) => {
+                filter.negate();
+                self
             }
-            ExpressionNode::Or(left, right) => {
-                left.negate();
-                right.negate();
-            }
-            ExpressionNode::Not(e) => e.negate(),
+            expression_node @ Self::And(_, _) => Self::Not(expression_node.into()),
+            expression_node @ Self::Or(_, _) => Self::Not(expression_node.into()),
+            Self::Not(expression_node) => *expression_node,
         }
     }
 
-    /// Applies De Morgan's law to the original tree.
-    /// We are trying to get rid of all possible OR expressions in favour of AND,
-    /// wo we could join multiple nested ANDs with the root level.
-    /// WARNING WARNING: IT DOES NOT WORK
-    pub fn optimize(self) -> ExpressionNode {
+    pub fn to_cnf(self) -> ExpressionNode {
         match self {
-            filter @ ExpressionNode::Leaf(_) => filter,
-
-            // Trivial case: the root node we have is AND. Optimize left and right branches and return
-            // the node as is.
-            ExpressionNode::And(left, right) => {
-                ExpressionNode::And(left.optimize().into(), right.optimize().into())
+            expression_node @ ExpressionNode::Leaf(_) => expression_node,
+            Self::And(left, right) => {
+                Self::And(left.to_cnf().into(), right.to_cnf().into())
             }
+            Self::Or(left, right) => Self::Not(
+                Self::And(left.to_cnf().negate().into(), right.to_cnf().negate().into())
+                    .into(),
+            ),
+            Self::Not(node) => match *node {
+                Self::Leaf(mut filter) => {
+                    filter.negate();
+                    Self::Leaf(filter)
+                }
+                Self::And(left, right) => Self::Not(
+                    Self::And(left.to_cnf().into(), right.to_cnf().into()).into(),
+                ),
 
-            // The root not is OR. Apply the law in a manner:
-            // if a == 1 || b == 37 {}
-            // if !(a != 1 && b != 37) {}
-            ExpressionNode::Or(left, right) => {
-                let mut left: Box<ExpressionNode> = left.optimize().into();
-                let mut right: Box<ExpressionNode> = right.optimize().into();
-                left.negate();
-                right.negate();
+                Self::Or(left, right) => Self::And(
+                    left.to_cnf().negate().into(),
+                    right.to_cnf().negate().into(),
+                ),
+                Self::Not(expression_node) => expression_node.to_cnf(),
+            },
+        }
+    }
+}
 
-                ExpressionNode::Not(ExpressionNode::And(left, right).into())
-            }
+#[cfg(test)]
+mod test {
+    use itertools::Itertools;
 
-            // The root not is NOT. We need to check the underlying expression first:
-            ExpressionNode::Not(ex) => {
-                match *ex {
-                    // The child of NOT expression is a Leaf Node. In this case we flip the sign
-                    // and bail.
-                    mut child @ ExpressionNode::Leaf(_) => {
-                        child.negate();
-                        child
-                    }
+    use crate::evaluate::traits::Evaluate;
+    use crate::parse::parse_root;
+    use crate::test_utils::DirEntryMock;
 
-                    // We've got NOT(AND(left, right)) expression. We can't do anything,
-                    // so optimize branches and return.
-                    ExpressionNode::And(left, right) => {
-                        // if !(a == 1 && b == 37) {}
-                        // if a != 1 || b != 37 {}
-                        let left = left.optimize().into();
-                        let right = right.optimize().into();
-                        ExpressionNode::Not(ExpressionNode::And(left, right).into())
-                    }
+    macro_rules! cnf_test {
+        ($fn_name:ident, $template:literal, $len:expr) => {
+            #[test]
+            fn $fn_name() {
+                let combinations =
+                    [true, false].iter().copied().combinations_with_replacement($len);
 
-                    // We are handling the NOT(OR(left, right)) case. We can make it AND using the law:
-                    // if !(a == 1 || b == 37) {}
-                    // if a != 1 && b != 37 {}
-                    ExpressionNode::Or(left, right) => {
-                        let left = left.optimize().into();
-                        let mut right: Box<ExpressionNode> = right.optimize().into();
-                        // left.negate();
-                        right.negate();
+                for combination in combinations {
+                    let expression = interpolate($template, &combination);
+                    let node = parse_root(&expression).unwrap();
+                    let expected = node.evaluate(&DirEntryMock::default()).unwrap();
 
-                        ExpressionNode::And(ExpressionNode::Not(left).into(), right)
-                    }
-
-                    // NOT(NOT(expression)) case. We just return the underlying expression.
-                    // if !(!(a == 3 && b == 3)) {}
-                    // if !(a != 3 || b != 3) {}
-                    // if a == 3 && b == 3 {}
-                    ExpressionNode::Not(expression) => (*expression).optimize(),
+                    let cnf_node = node.to_cnf();
+                    let result = cnf_node.evaluate(&DirEntryMock::default()).unwrap();
+                    assert_eq!(result, expected, "Failed for `{expression}`");
                 }
             }
+        };
+    }
+
+    fn interpolate(template: &str, values: &[bool]) -> String {
+        let mut result = template.to_string();
+        for (index, &value) in values.iter().enumerate() {
+            result = result.replace(&format!(":{index}"), &value.to_string());
         }
+        result
+    }
+
+    cnf_test!(plain_or, "bool=:0 or bool=:0", 1);
+    cnf_test!(plain_and, "bool=:0 and bool=:0", 1);
+    cnf_test!(plain_not, "not bool=:0", 1);
+
+    cnf_test!(not_or, "not (bool=:0 or bool=:1)", 2);
+    cnf_test!(not_and, "not (bool=:0 and bool=:1)", 2);
+
+    cnf_test!(not_not_and, "not (not (bool=:0 and bool=:1))", 2);
+    cnf_test!(not_not_or, "not (not (bool=:0 or bool=:1))", 2);
+
+    cnf_test!(nested_or_1, "(bool=:0 and bool=:1) or (bool=:2 or bool=:3)", 4);
+    cnf_test!(not_nested_or_1, "not ((bool=:0 and bool=:1) or (bool=:2 or bool=:3))", 4);
+
+    cnf_test!(nested_or_2, "bool=:0 or bool=:1 or bool=:2 or bool=:3 or bool=:4", 5);
+    cnf_test!(
+        not_nested_or_2,
+        "not (bool=:0 or bool=:1 or bool=:2 or bool=:3 or bool=:4)",
+        5
+    );
+
+    #[test]
+    fn test_1() {
+        use crate::parse::render::render_expression_tree;
+        let expression = "bool=true or bool=false or bool=false or bool=true";
+        let expression_node = parse_root(expression).unwrap();
+        println!("{}", render_expression_tree(&expression_node));
+
+        let cnf = expression_node.to_cnf();
+        println!("{}", render_expression_tree(&cnf));
     }
 }

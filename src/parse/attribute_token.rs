@@ -56,6 +56,7 @@ impl<T> UnsafeWrapper<T> {
 unsafe impl<T> Send for UnsafeWrapper<T> {}
 unsafe impl<T> Sync for UnsafeWrapper<T> {}
 
+#[cfg(not(test))]
 mk_filter_enum!(AttributeToken, ATTRIBUTE_TOKEN_ALIASES, [
     Name: "name",
     ModificationTime: "mtime",
@@ -68,6 +69,22 @@ mk_filter_enum!(AttributeToken, ATTRIBUTE_TOKEN_ALIASES, [
     Group: "group",
     User: "user",
     Type: "type"
+]);
+
+#[cfg(test)]
+mk_filter_enum!(AttributeToken, ATTRIBUTE_TOKEN_ALIASES, [
+    Name: "name",
+    ModificationTime: "mtime",
+    AccessTime: "atime",
+    Size: "size",
+    Extension: "ext", "extension",
+    Contains: "contains",
+    Depth: "depth",
+    Permissions: "permissions", "perms", "perm",
+    Group: "group",
+    User: "user",
+    Type: "type",
+    Bool: "bool"
 ]);
 
 fn parse_comparison_and_pattern(
@@ -128,42 +145,42 @@ impl GenericParser for AttributeToken {
 
                 (input, Filter::Name { value: pattern, comparison })
             }
-            AttributeToken::Extension => {
+            Self::Extension => {
                 let (input, (comparison, pattern)) = parse_comparison_and_pattern(input)?;
                 let (input, comparison) = filter_eq_neq(input, comparison)?;
 
                 (input, Filter::Extension { value: pattern, comparison })
             }
-            AttributeToken::Contains => {
+            Self::Contains => {
                 let (input, (comparison, pattern)) = parse_comparison_and_pattern(input)?;
                 let (input, comparison) = filter_eq_neq(input, comparison)?;
 
                 (input, Filter::Contains { value: pattern, comparison })
             }
-            AttributeToken::Group => {
+            Self::Group => {
                 let (input, comparison) = parse_comparison(input)?;
                 let (input, value) = parse_user_or_group(get_group)(input)?;
 
                 (input, Filter::User { comparison, value })
             }
-            AttributeToken::User => {
+            Self::User => {
                 let (input, comparison) = parse_comparison(input)?;
                 let (input, value) = parse_user_or_group(get_user)(input)?;
 
                 (input, Filter::User { comparison, value })
             }
 
-            AttributeToken::AccessTime => {
+            Self::AccessTime => {
                 let (input, (comparison, duration)) =
                     parse_comparison_and_duration(input)?;
                 (input, Filter::AccessTime { value: duration, comparison })
             }
-            AttributeToken::ModificationTime => {
+            Self::ModificationTime => {
                 let (input, (comparison, duration)) =
                     parse_comparison_and_duration(input)?;
                 (input, Filter::ModificationTime { value: duration, comparison })
             }
-            AttributeToken::Size => {
+            Self::Size => {
                 let (input, comparison) = parse_comparison(input)?;
                 let (input, number) =
                     terminated(parse_positive_number, opt(multispace0))(input)?;
@@ -172,13 +189,13 @@ impl GenericParser for AttributeToken {
 
                 (input, Filter::Size { value: num_bytes, comparison })
             }
-            AttributeToken::Depth => {
+            Self::Depth => {
                 let (input, comparison) = parse_comparison(input)?;
                 let (input, value) = ws(parse_positive_number)(input)?;
 
                 (input, Filter::Depth { value, comparison })
             }
-            AttributeToken::Permissions => {
+            Self::Permissions => {
                 let (input, comparison) = parse_comparison(input)?;
 
                 let (input, mode) =
@@ -188,11 +205,23 @@ impl GenericParser for AttributeToken {
 
                 (input, Filter::Permissions { value, comparison })
             }
-            AttributeToken::Type => {
+            Self::Type => {
                 let (input, comparison) = parse_comparison(input)?;
                 let (input, value) = ws(parse_file_type)(input)?;
 
                 (input, Filter::Type { value, comparison })
+            }
+
+            #[cfg(test)]
+            Self::Bool => {
+                use nom::bytes::complete::tag;
+
+                let (input, comparison) = parse_comparison(input)?;
+                let (input, value) = ws(alt((tag("true"), tag("false"))))(input)?;
+
+                let value = value == "true";
+
+                (input, Filter::Bool { value, comparison })
             }
         })
     }

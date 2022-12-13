@@ -1,7 +1,7 @@
 use crate::mk_filter_enum;
 
 mk_filter_enum!(SizeUnit, SIZE_UNIT_ALIASES, [
-    Byte: "B",
+    Byte: "B", "b",
     Kilobyte: "Kb", "K",
     Megabyte: "Mb", "M",
     Gigabyte: "Gb", "G",
