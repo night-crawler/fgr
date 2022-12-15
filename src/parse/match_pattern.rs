@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 
+#[derive(Clone)]
 pub enum MatchPattern {
     Regex(regex::Regex),
     Glob(globset::GlobMatcher),

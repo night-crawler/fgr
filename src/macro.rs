@@ -9,7 +9,7 @@ macro_rules! mk_filter_enum {
         ]
     ) => {
 
-        #[derive(Debug, Eq, PartialEq, strum_macros::EnumIter, strum_macros::EnumString, strum_macros::IntoStaticStr)]
+        #[derive(Debug, Eq, Clone, PartialEq, strum_macros::EnumIter, strum_macros::EnumString, strum_macros::IntoStaticStr)]
         pub enum $name {
             $(
                 $opt_name,

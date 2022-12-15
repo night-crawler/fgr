@@ -1,8 +1,12 @@
 use dot_writer::{Attributes, DotWriter, NodeId, Scope};
 
-use crate::parse::expression_node::ExpressionNode;
+use crate::parse::expression_node::{CnfNode, ExpressionNode};
 
-fn traverse(scope: &mut Scope, root: &ExpressionNode, counter: &mut usize) -> NodeId {
+pub trait Render {
+    fn render(&self) -> String;
+}
+
+fn traverse_expression_node(scope: &mut Scope, root: &ExpressionNode, counter: &mut usize) -> NodeId {
     let current = *counter;
     *counter += 1;
 
@@ -17,12 +21,12 @@ fn traverse(scope: &mut Scope, root: &ExpressionNode, counter: &mut usize) -> No
         }
         ExpressionNode::And(left, right) => {
             let mut node = scope.node_named(current.to_string());
-            node.set_label("AND");
+            node.set_label("&");
             let id = node.id();
             drop(node);
 
-            let left_child = traverse(scope, left, counter);
-            let right_child = traverse(scope, right, counter);
+            let left_child = traverse_expression_node(scope, left, counter);
+            let right_child = traverse_expression_node(scope, right, counter);
 
             scope.edge(id.clone(), left_child);
             scope.edge(id.clone(), right_child);
@@ -31,12 +35,12 @@ fn traverse(scope: &mut Scope, root: &ExpressionNode, counter: &mut usize) -> No
         }
         ExpressionNode::Or(left, right) => {
             let mut node = scope.node_named(current.to_string());
-            node.set_label("OR");
+            node.set_label("|");
             let id = node.id();
             drop(node);
 
-            let left_child = traverse(scope, left, counter);
-            let right_child = traverse(scope, right, counter);
+            let left_child = traverse_expression_node(scope, left, counter);
+            let right_child = traverse_expression_node(scope, right, counter);
 
             scope.edge(id.clone(), left_child);
             scope.edge(id.clone(), right_child);
@@ -45,11 +49,11 @@ fn traverse(scope: &mut Scope, root: &ExpressionNode, counter: &mut usize) -> No
         }
         ExpressionNode::Not(exp) => {
             let mut node = scope.node_named(current.to_string());
-            node.set_label("NOT");
+            node.set_label("!");
             let id = node.id();
             drop(node);
 
-            let left_child = traverse(scope, exp, counter);
+            let left_child = traverse_expression_node(scope, exp, counter);
 
             scope.edge(id.clone(), left_child);
 
@@ -58,16 +62,81 @@ fn traverse(scope: &mut Scope, root: &ExpressionNode, counter: &mut usize) -> No
     }
 }
 
-pub fn render_expression_tree(node: &ExpressionNode) -> String {
-    let mut output_bytes = Vec::new();
-    let mut writer = DotWriter::from(&mut output_bytes);
-    writer.set_pretty_print(true);
 
-    let mut scope = writer.digraph();
 
-    traverse(&mut scope, node, &mut 0);
+impl Render for ExpressionNode {
+    fn render(&self) -> String {
+        let mut output_bytes = Vec::new();
+        let mut writer = DotWriter::from(&mut output_bytes);
+        writer.set_pretty_print(true);
 
-    drop(scope);
+        let mut scope = writer.digraph();
 
-    unsafe { String::from_utf8_unchecked(output_bytes) }
+        traverse_expression_node(&mut scope, self, &mut 0);
+
+        drop(scope);
+
+        unsafe { String::from_utf8_unchecked(output_bytes) }
+    }
+}
+
+
+fn traverse_cnf_node(scope: &mut Scope, root: &CnfNode, counter: &mut usize) -> NodeId {
+    let current = *counter;
+    *counter += 1;
+
+    match root {
+        CnfNode::Leaf(filter) => {
+            let label = format!("{filter}");
+            let mut node = scope.node_named(current.to_string());
+            let id = node.id();
+            node.set_label(&label);
+
+            id
+        }
+        CnfNode::And(cnf_nodes) => {
+            let mut graph_node = scope.node_named(current.to_string());
+            graph_node.set_label("&");
+            let node_id = graph_node.id();
+            drop(graph_node);
+
+            for cnf_node in cnf_nodes {
+                let cnf_node_id = traverse_cnf_node(scope, cnf_node, counter);
+                scope.edge(node_id.clone(), cnf_node_id);
+            }
+
+            node_id
+        }
+        CnfNode::Or(cnf_nodes) => {
+            let mut graph_node = scope.node_named(current.to_string());
+            graph_node.set_label("|");
+            let node_id = graph_node.id();
+            drop(graph_node);
+
+            for cnf_node in cnf_nodes {
+                let cnf_node_id = traverse_cnf_node(scope, cnf_node, counter);
+                scope.edge(node_id.clone(), cnf_node_id);
+            }
+
+            node_id
+        }
+
+    }
+}
+
+
+impl Render for CnfNode {
+    fn render(&self) -> String {
+        let mut output_bytes = Vec::new();
+        let mut writer = DotWriter::from(&mut output_bytes);
+        writer.set_pretty_print(true);
+
+        let mut scope = writer.digraph();
+
+        traverse_cnf_node(&mut scope, self, &mut 0);
+
+        drop(scope);
+
+        unsafe { String::from_utf8_unchecked(output_bytes) }
+    }
 }

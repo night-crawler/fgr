@@ -7,7 +7,7 @@ use crate::errors::GenericError;
 use crate::evaluate::traits::Evaluate;
 use crate::parse::expression_node::ExpressionNode;
 use crate::parse::parse_root;
-use crate::parse::render::render_expression_tree;
+use crate::parse::render::Render;
 use crate::run::{set_int_handler, spawn_receiver, spawn_senders, ProcessStatus};
 
 pub mod config;
@@ -31,7 +31,7 @@ fn main() {
     };
 
     if config.print_expression_tree {
-        println!("{}", render_expression_tree(&config.root));
+        println!("{}", config.root.render());
         std::process::exit(0);
     }
 

@@ -9,7 +9,7 @@ use crate::parse::comparison::Comparison;
 use crate::parse::file_type::FileType;
 use crate::parse::match_pattern::MatchPattern;
 
-#[derive(Eq, PartialEq, IntoStaticStr)]
+#[derive(Eq, PartialEq, Clone, IntoStaticStr)]
 pub enum Filter {
     Size {
         value: usize,
@@ -86,8 +86,20 @@ impl Filter {
 
 impl Display for Filter {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let self_repr: &'static str = self.into();
-        write!(f, "{} ", self_repr)?;
+        #[cfg(test)]
+        {
+            if let Self::Bool { .. } = self {
+            } else {
+                let self_repr: &'static str = self.into();
+                write!(f, "{} ", self_repr)?;
+            }
+        }
+
+        #[cfg(not(test))]
+        {
+            let self_repr: &'static str = self.into();
+            write!(f, "{} ", self_repr)?;
+        }
 
         match self {
             Self::Size { comparison, value } => write!(f, "{comparison} {value}"),
@@ -107,7 +119,9 @@ impl Display for Filter {
                 write!(f, "{comparison} {}", unix_mode::to_string(value.mode()))
             }
             #[cfg(test)]
-            Self::Bool { comparison, value } => write!(f, "{comparison} {value}"),
+            Self::Bool { comparison: _, value } => {
+                write!(f, "{}", &format!("{value}")[..1])
+            },
         }
     }
 }
