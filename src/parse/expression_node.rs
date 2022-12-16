@@ -90,9 +90,7 @@ impl From<ExpressionNode> for CnfNode {
                         CnfNode::And(left_nodes)
                     }
 
-                    (left, right) => {
-                        CnfNode::And(vec![left, right])
-                    }
+                    (left, right) => CnfNode::And(vec![left, right]),
                 }
             }
             ExpressionNode::Or(left, right) => {
@@ -108,7 +106,9 @@ impl From<ExpressionNode> for CnfNode {
                         nodes.push(leaf);
                         CnfNode::Or(nodes)
                     }
-                    _ => unimplemented!(),
+                    wtf => {
+                        unimplemented!("Not implemented for {wtf:?}")
+                    }
                 }
             }
             ExpressionNode::Not(_) => unimplemented!("Must never happen"),
@@ -133,8 +133,8 @@ impl ExpressionNode {
         }
     }
 
-    fn distribute_or(left: Self, right: Self) -> Self {
-        match (left, right) {
+    fn distribute_or(left: Self, right: Self) -> Result<Self, Self> {
+        Ok(match (left, right) {
             (Self::And(left_left, left_right), Self::And(right_left, right_right)) => {
                 let pair1 = Self::Or(left_left.clone(), right_left.clone()).into();
                 let pair2 = Self::Or(left_left.clone(), right_right.clone()).into();
@@ -164,29 +164,46 @@ impl ExpressionNode {
             }
 
             (left @ Self::Or(_, _), right @ Self::And(_, _)) => {
-                Self::distribute_or(right, left)
+                Self::distribute_or(right, left).unwrap()
             }
             (left @ Self::Leaf(_), right @ Self::And(_, _)) => {
-                Self::distribute_or(right, left)
+                Self::distribute_or(right, left).unwrap()
             }
 
-            // do nothing
-            (left, right) => Self::Or(left.into(), right.into()),
-        }
+            (left, right) => return Err(Self::Or(left.into(), right.into())),
+        })
     }
 
     pub fn to_cnf(self) -> Self {
+        let mut count = 1;
+        let mut root = self;
+
+        while count > 0 {
+            count = 0;
+            root = root.to_cnf_step(&mut count);
+        }
+
+        root
+    }
+
+    fn to_cnf_step(self, count: &mut u8) -> Self {
         match self {
             Self::Not(_) => unimplemented!("It must never happen"),
             expression_node @ Self::Leaf(_) => expression_node,
             Self::And(left, right) => {
-                Self::And(left.to_cnf().into(), right.to_cnf().into())
+                Self::And(left.to_cnf_step(count).into(), right.to_cnf_step(count).into())
             }
             Self::Or(left, right) => {
-                let left = left.to_cnf();
-                let right = right.to_cnf();
+                let left = left.to_cnf_step(count);
+                let right = right.to_cnf_step(count);
 
-                Self::distribute_or(left, right)
+                match Self::distribute_or(left, right) {
+                    Ok(node) => {
+                        *count += 1;
+                        node
+                    }
+                    Err(node) => node,
+                }
             }
         }
     }
@@ -298,12 +315,12 @@ mod test {
     fn test_1() {
         use crate::parse::render::Render;
 
-        // let expression = "bool=false and (bool=false and bool=true) or not(bool=true or bool=false or not (bool=false or bool=true))";
-        let expression = "bool=true and (bool=false or (bool=true and bool=false))";
+        let expression = "bool=false and (bool=false and bool=true) or not(bool=true or bool=false or not (bool=false or bool=true))";
+        // let expression = "bool=true and (bool=false or (bool=true and bool=false))";
         let expression_node = parse_root(expression).unwrap();
         println!("{}", expression_node.render());
 
-        let cnf = expression_node.simplify_not().to_cnf().to_cnf().to_cnf();
+        let cnf = expression_node.simplify_not().to_cnf();
         println!("{}", cnf.render());
 
         let q = CnfNode::from(cnf);
