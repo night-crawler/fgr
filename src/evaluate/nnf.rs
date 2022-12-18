@@ -2,10 +2,6 @@ use std::collections::BTreeSet;
 use std::hint::unreachable_unchecked;
 use std::ops::{BitAnd, BitOr, Not};
 
-pub trait Aux {
-    fn aux() -> Self;
-}
-
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Nnf<V> {
     Var(V, bool),
@@ -13,7 +9,47 @@ pub enum Nnf<V> {
     Or(BTreeSet<Nnf<V>>),
 }
 
-impl<V: Ord + PartialOrd + Clone + Aux> Nnf<V> {
+#[macro_export]
+macro_rules! var {
+    ($name:expr, $val:expr) => {
+        self::Nnf::Var($name, $val)
+    };
+    ($name:expr) => {
+        self::Nnf::Var($name, true)
+    };
+}
+
+#[macro_export]
+macro_rules! or {
+    (
+        $($expression:expr),+
+    ) => {
+        self::Nnf::Or({
+            let mut children = std::collections::BTreeSet::new();
+            $(
+                children.insert($expression);
+            )+
+            children
+        })
+    };
+}
+
+#[macro_export]
+macro_rules! and {
+    (
+        $($expression:expr),+
+    ) => {
+        self::Nnf::And({
+            let mut children = std::collections::BTreeSet::new();
+            $(
+                children.insert($expression);
+            )+
+            children
+        })
+    };
+}
+
+impl<V: Ord + PartialOrd + Clone> Nnf<V> {
     pub fn or<I: IntoIterator<Item = Nnf<V>>>(iter: I) -> Self {
         Self::Or(BTreeSet::from_iter(iter))
     }
@@ -57,37 +93,6 @@ impl<V: Ord + PartialOrd + Clone + Aux> Nnf<V> {
         }
     }
 
-    pub fn to_cnf(self) -> Nnf<V> {
-        let mut clauses = BTreeSet::new();
-        self.process_required(&mut clauses);
-        Self::And(clauses)
-    }
-
-    fn process_required(self, clauses: &mut BTreeSet<Nnf<V>>) {
-        match self {
-            var @ Nnf::Var(_, _) => {
-                clauses.insert(Self::or([var]));
-            }
-            Nnf::And(children) | Nnf::Or(children) if children.len() == 1 => {
-                children.into_iter().next().unwrap().process_required(clauses)
-            }
-            Nnf::Or(children) => {
-                let or = Self::or(
-                    children.into_iter().map(|child| child.process_node(clauses)),
-                );
-                if or.has_inversions() {
-                    return;
-                }
-                clauses.insert(or);
-            }
-            Nnf::And(children) => {
-                for child in children {
-                    child.process_required(clauses);
-                }
-            }
-        }
-    }
-
     fn has_inversions(&self) -> bool {
         let children = match self {
             Nnf::Var(_, _) => return false,
@@ -102,62 +107,9 @@ impl<V: Ord + PartialOrd + Clone + Aux> Nnf<V> {
 
         false
     }
-
-    fn process_node(self, clauses: &mut BTreeSet<Nnf<V>>) -> Nnf<V> {
-        let node = match self {
-            var @ Nnf::Var(_, _) => return var,
-            Nnf::And(children) | Nnf::Or(children) if children.len() == 1 => {
-                return children.into_iter().next().unwrap().process_node(clauses)
-            }
-            Nnf::And(children) => {
-                Nnf::and(children.into_iter().map(|child| child.process_node(clauses)))
-            }
-            Nnf::Or(children) => {
-                Nnf::or(children.into_iter().map(|child| child.process_node(clauses)))
-            }
-        };
-
-        let aux = Self::Var(V::aux(), true);
-
-        match node {
-            Nnf::And(_) if node.has_inversions() => {
-                clauses.insert(Self::or([!aux.clone()]));
-            }
-            Nnf::Or(_) if node.has_inversions() => {
-                clauses.insert(Self::or([aux.clone()]));
-            }
-
-            Nnf::And(children) => {
-                clauses.insert(Self::or(
-                    children
-                        .iter()
-                        .map(|child| !child)
-                        .chain(std::iter::once(aux.clone())),
-                ));
-
-                for child in children {
-                    clauses.insert(Self::or([!aux.clone(), child]));
-                }
-            }
-
-            Nnf::Or(children) => {
-                clauses.insert(Self::or(
-                    children.iter().cloned().chain(std::iter::once(!aux.clone())),
-                ));
-
-                for child in children {
-                    clauses.insert(Self::or([!child, aux.clone()]));
-                }
-            }
-
-            Self::Var(_, _) => unsafe { unreachable_unchecked() },
-        }
-
-        aux
-    }
 }
 
-impl<V: Ord + PartialOrd + Clone + Aux> BitOr for Nnf<V> {
+impl<V: Ord + PartialOrd + Clone> BitOr for Nnf<V> {
     type Output = Nnf<V>;
 
     fn bitor(self, rhs: Self) -> Self::Output {
@@ -192,7 +144,7 @@ impl<V: Ord + PartialOrd + Clone + Aux> BitOr for Nnf<V> {
     }
 }
 
-impl<V: Ord + PartialOrd + Clone + Aux> BitAnd for Nnf<V> {
+impl<V: Ord + PartialOrd + Clone> BitAnd for Nnf<V> {
     type Output = Nnf<V>;
 
     fn bitand(self, rhs: Self) -> Self::Output {
@@ -253,81 +205,162 @@ impl<V: Ord + PartialOrd + Clone> Not for &Nnf<V> {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+struct TseitinTransform<A, V> {
+    aux_factory: A,
+    clauses: BTreeSet<Nnf<V>>,
+}
 
-    use lazy_static::lazy_static;
-
-    use crate::evaluate::nnf::{Nnf, Aux};
-
-    lazy_static! {
-        static ref COUNTER: AtomicUsize = AtomicUsize::new(0);
+impl<A, V> TseitinTransform<A, V>
+where
+    A: FnMut() -> Nnf<V>,
+    V: Ord + PartialOrd + Clone,
+{
+    pub fn new(aux_factory: A) -> Self {
+        Self { aux_factory, clauses: BTreeSet::default() }
     }
 
-    impl Aux for &str {
-        fn aux() -> &'static str {
-            let name = format!("aux_{}", COUNTER.fetch_add(1, Ordering::Relaxed));
-            Box::leak(Box::new(name))
+    fn process_required(&mut self, root: Nnf<V>) {
+        match root {
+            var @ Nnf::Var(_, _) => {
+                self.clauses.insert(Nnf::or([var]));
+            }
+            Nnf::And(children) | Nnf::Or(children) if children.len() == 1 => {
+                self.process_required(children.into_iter().next().unwrap());
+            }
+            Nnf::Or(children) => {
+                let or =
+                    Nnf::or(children.into_iter().map(|child| self.process_node(child)));
+                if or.has_inversions() {
+                    return;
+                }
+                self.clauses.insert(or);
+            }
+            Nnf::And(children) => {
+                for child in children {
+                    self.process_required(child);
+                }
+            }
         }
     }
 
+    fn process_node(&mut self, root: Nnf<V>) -> Nnf<V> {
+        let node = match root {
+            var @ Nnf::Var(_, _) => return var,
+            Nnf::And(children) | Nnf::Or(children) if children.len() == 1 => {
+                self.process_node(children.into_iter().next().unwrap())
+            }
+            Nnf::And(children) => {
+                Nnf::and(children.into_iter().map(|child| self.process_node(child)))
+            }
+            Nnf::Or(children) => {
+                Nnf::or(children.into_iter().map(|child| self.process_node(child)))
+            }
+        };
+
+        let aux = (&mut self.aux_factory)();
+
+        match node {
+            Nnf::And(_) if node.has_inversions() => {
+                self.clauses.insert(Nnf::or([!aux.clone()]));
+            }
+            Nnf::Or(_) if node.has_inversions() => {
+                self.clauses.insert(Nnf::or([aux.clone()]));
+            }
+
+            Nnf::And(children) => {
+                self.clauses.insert(Nnf::or(
+                    children
+                        .iter()
+                        .map(|child| !child)
+                        .chain(std::iter::once(aux.clone())),
+                ));
+
+                for child in children {
+                    self.clauses.insert(Nnf::or([!aux.clone(), child]));
+                }
+            }
+
+            Nnf::Or(children) => {
+                self.clauses.insert(Nnf::or(
+                    children.iter().cloned().chain(std::iter::once(!aux.clone())),
+                ));
+
+                for child in children {
+                    self.clauses.insert(Nnf::or([!child, aux.clone()]));
+                }
+            }
+
+            Nnf::Var(_, _) => unsafe { unreachable_unchecked() },
+        }
+
+        aux
+    }
+
+    pub fn transform(mut self, root: Nnf<V>) -> Nnf<V> {
+        self.process_required(root);
+        Nnf::And(self.clauses)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::evaluate::nnf::{Nnf, TseitinTransform};
+
     #[test]
     fn test_or() {
-        let a = Nnf::Var("a", true);
-        let b = Nnf::Var("b", false);
-        let c = Nnf::Var("c", true);
-        let d = Nnf::Var("d", false);
-        let e = Nnf::Var("e", true);
+        let a = var!("a", true);
+        let b = var!("b", false);
+        let c = var!("c", true);
+        let d = var!("d", false);
+        let e = var!("e", true);
 
-        assert_eq!(
-            a.clone() | b.clone(),
-            Nnf::or([Nnf::Var("a", true), Nnf::Var("b", false)])
-        );
+        assert_eq!(a.clone() | b.clone(), Nnf::or([var!("a", true), var!("b", false)]));
 
-        let or = Nnf::or([a.clone(), b.clone()]);
+        let or = or!(a.clone(), b.clone());
         assert_eq!(
-            or | c.clone() | Nnf::and([d.clone()]) | Nnf::or([e.clone()]),
-            Nnf::or([a.clone(), b.clone(), c.clone(), Nnf::and([d.clone()]), e])
+            or | c.clone() | and!(d.clone()) | or!(e.clone()),
+            or!(a.clone(), b.clone(), c.clone(), and!(d.clone()), e)
         )
     }
 
     #[test]
     fn test_and() {
-        let a = Nnf::Var("a", true);
-        let b = Nnf::Var("b", false);
-        let c = Nnf::Var("c", true);
-        let d = Nnf::Var("d", false);
-        let e = Nnf::Var("e", true);
+        let a = var!("a", true);
+        let b = var!("b", false);
+        let c = var!("c", true);
+        let d = var!("d", false);
+        let e = var!("e", true);
 
-        assert_eq!(
-            a.clone() & b.clone(),
-            Nnf::and([Nnf::Var("a", true), Nnf::Var("b", false)])
-        );
+        assert_eq!(a.clone() & b.clone(), and!(var!("a", true), var!("b", false)));
 
-        let and = Nnf::and([a.clone(), b.clone()]);
+        let and = and!(a.clone(), b.clone());
         assert_eq!(
-            and & c.clone() & Nnf::or([d.clone()]) & Nnf::and([e.clone()]),
-            Nnf::and([a.clone(), b.clone(), c.clone(), Nnf::or([d.clone()]), e.clone()])
+            and & c.clone() & Nnf::or([d.clone()]) & and!(e.clone()),
+            and!(a.clone(), b.clone(), c.clone(), or!(d.clone()), e.clone())
         )
     }
 
     #[test]
     fn validate() {
-        let sentence = Nnf::or([
-            Nnf::and([
-                Nnf::Var("g", true),
-                Nnf::and([Nnf::Var("e", true), Nnf::Var("f", true)]),
-            ]),
-            Nnf::and([
-                Nnf::or([Nnf::Var("a", false), Nnf::Var("b", true)]),
-                Nnf::and([Nnf::Var("c", true), Nnf::Var("d", false)]),
-            ]),
-        ]);
+        let sentence = or!(
+            and!(var!("g", true), and!(var!("e", true), var!("f", true))),
+            and!(
+                or!(var!("a", false), var!("b", true)),
+                and!(var!("c", true), var!("d", false))
+            )
+        );
 
         assert!(!sentence.is_cnf());
 
-        let sentence = sentence.to_cnf();
+        let mut counter = 0;
+        let transformer = TseitinTransform::new(|| {
+            let name: &'static str = Box::leak(Box::new(format!("aux_{}", counter)));
+            counter += 1;
+            Nnf::Var(name, true)
+        });
+
+        let sentence = transformer.transform(sentence);
+
         assert!(sentence.is_cnf());
     }
 }
