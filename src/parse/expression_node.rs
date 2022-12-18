@@ -1,3 +1,7 @@
+use std::fmt::{Display, Formatter};
+
+use itertools::Itertools;
+
 use crate::parse::filter::Filter;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -9,102 +13,120 @@ pub enum ExpressionNode {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum CnfNode {
+pub enum NnfNode {
     Leaf(Filter),
-    And(Vec<CnfNode>),
-    Or(Vec<CnfNode>),
+    And(Vec<NnfNode>),
+    Or(Vec<NnfNode>),
 }
 
-impl CnfNode {
+impl Display for NnfNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NnfNode::Leaf(filter) => {
+                write!(f, "{filter}")
+            }
+            NnfNode::And(nodes) => {
+                let a = nodes.iter().map(|node| node.to_string()).join(" ∧ ");
+                write!(f, "({a})")
+            }
+            NnfNode::Or(nodes) => {
+                let a = nodes.iter().map(|node| node.to_string()).join(" ∨ ");
+                write!(f, "({a})")
+            }
+        }
+    }
+}
+
+impl NnfNode {
     fn and(self, other: Self) -> Self {
         match (self, other) {
-            (left @ CnfNode::Leaf(_), right @ CnfNode::Leaf(_)) => {
-                CnfNode::And(vec![left, right])
+            (left @ NnfNode::Leaf(_), right @ NnfNode::Leaf(_)) => {
+                NnfNode::And(vec![left, right])
             }
-            (left @ CnfNode::Leaf(_), CnfNode::And(mut nodes)) => {
+            (left @ NnfNode::Leaf(_), NnfNode::And(mut nodes)) => {
                 nodes.push(left);
-                CnfNode::And(nodes)
+                NnfNode::And(nodes)
             }
-            (left @ CnfNode::Leaf(_), CnfNode::Or(nodes)) => {
+            (left @ NnfNode::Leaf(_), NnfNode::Or(nodes)) => {
                 let mut result = vec![];
                 for node in nodes {
                     result.push(node.and(left.clone()));
                 }
 
-                CnfNode::Or(result)
+                NnfNode::Or(result)
             }
 
-            (left @ CnfNode::And(_), right @ CnfNode::Leaf(_)) => right.and(left),
-            (CnfNode::And(mut nodes_left), CnfNode::And(nodes_right)) => {
+            (left @ NnfNode::And(_), right @ NnfNode::Leaf(_)) => right.and(left),
+            (NnfNode::And(mut nodes_left), NnfNode::And(nodes_right)) => {
                 nodes_left.extend(nodes_right);
-                CnfNode::And(nodes_left)
+                NnfNode::And(nodes_left)
             }
-            (CnfNode::And(and_nodes), CnfNode::Or(or_nodes)) => {
+            (NnfNode::And(and_nodes), NnfNode::Or(or_nodes)) => {
                 let mut distribution = vec![];
                 for or_node in or_nodes {
                     let mut nodes = and_nodes.clone();
                     nodes.push(or_node);
-                    distribution.push(CnfNode::And(nodes));
+                    distribution.push(NnfNode::And(nodes));
                 }
-                CnfNode::Or(distribution)
+                NnfNode::Or(distribution)
             }
 
-            (left @ CnfNode::Or(_), right @ CnfNode::Leaf(_)) => right.and(left),
+            (left @ NnfNode::Or(_), right @ NnfNode::Leaf(_)) => right.and(left),
 
-            (left @ CnfNode::Or(_), right @ CnfNode::And(_)) => right.and(left),
+            (left @ NnfNode::Or(_), right @ NnfNode::And(_)) => right.and(left),
 
-            (CnfNode::Or(left_nodes), CnfNode::Or(right_nodes)) => {
+            (NnfNode::Or(left_nodes), NnfNode::Or(right_nodes)) => {
                 let mut distribution = vec![];
                 for left_node in left_nodes {
                     for right_node in right_nodes.clone() {
                         distribution.push(left_node.clone().and(right_node));
                     }
                 }
-                CnfNode::Or(distribution)
+                NnfNode::Or(distribution)
             }
         }
     }
 }
 
-impl From<ExpressionNode> for CnfNode {
+impl From<ExpressionNode> for NnfNode {
     fn from(expression_node: ExpressionNode) -> Self {
         match expression_node {
             ExpressionNode::Leaf(filter) => Self::Leaf(filter),
             ExpressionNode::And(left, right) => {
-                let left: CnfNode = (*left).into();
-                let right: CnfNode = (*right).into();
+                let left: NnfNode = (*left).into();
+                let right: NnfNode = (*right).into();
 
                 match (left, right) {
-                    (left @ CnfNode::Leaf(_), right @ CnfNode::Leaf(_)) => {
-                        CnfNode::And(vec![left, right])
+                    (left @ NnfNode::Leaf(_), right @ NnfNode::Leaf(_)) => {
+                        NnfNode::And(vec![left, right])
                     }
 
-                    (leaf @ CnfNode::Leaf(_), CnfNode::And(mut nodes))
-                    | (CnfNode::And(mut nodes), leaf @ CnfNode::Leaf(_)) => {
+                    (leaf @ NnfNode::Leaf(_), NnfNode::And(mut nodes))
+                    | (NnfNode::And(mut nodes), leaf @ NnfNode::Leaf(_)) => {
                         nodes.push(leaf);
-                        CnfNode::And(nodes)
+                        NnfNode::And(nodes)
                     }
 
-                    (CnfNode::And(mut left_nodes), CnfNode::And(right_nodes)) => {
+                    (NnfNode::And(mut left_nodes), NnfNode::And(right_nodes)) => {
                         left_nodes.extend(right_nodes);
-                        CnfNode::And(left_nodes)
+                        NnfNode::And(left_nodes)
                     }
 
-                    (left, right) => CnfNode::And(vec![left, right]),
+                    (left, right) => NnfNode::And(vec![left, right]),
                 }
             }
             ExpressionNode::Or(left, right) => {
-                let left: CnfNode = (*left).into();
-                let right: CnfNode = (*right).into();
+                let left: NnfNode = (*left).into();
+                let right: NnfNode = (*right).into();
 
                 match (left, right) {
-                    (left @ CnfNode::Leaf(_), right @ CnfNode::Leaf(_)) => {
-                        CnfNode::Or(vec![left, right])
+                    (left @ NnfNode::Leaf(_), right @ NnfNode::Leaf(_)) => {
+                        NnfNode::Or(vec![left, right])
                     }
-                    (leaf @ CnfNode::Leaf(_), CnfNode::Or(mut nodes))
-                    | (CnfNode::Or(mut nodes), leaf @ CnfNode::Leaf(_)) => {
+                    (leaf @ NnfNode::Leaf(_), NnfNode::Or(mut nodes))
+                    | (NnfNode::Or(mut nodes), leaf @ NnfNode::Leaf(_)) => {
                         nodes.push(leaf);
-                        CnfNode::Or(nodes)
+                        NnfNode::Or(nodes)
                     }
                     wtf => {
                         unimplemented!("Not implemented for {wtf:?}")
@@ -208,14 +230,14 @@ impl ExpressionNode {
         }
     }
 
-    pub fn simplify_not(self) -> Self {
+    pub fn to_nnf(self) -> Self {
         match self {
             expression_node @ ExpressionNode::Leaf(_) => expression_node,
             Self::And(left, right) => {
-                Self::And(left.simplify_not().into(), right.simplify_not().into())
+                Self::And(left.to_nnf().into(), right.to_nnf().into())
             }
             Self::Or(left, right) => {
-                Self::Or(left.simplify_not().into(), right.simplify_not().into())
+                Self::Or(left.to_nnf().into(), right.to_nnf().into())
             }
 
             Self::Not(node) => match *node {
@@ -224,15 +246,15 @@ impl ExpressionNode {
                     Self::Leaf(filter)
                 }
                 Self::And(left, right) => Self::Or(
-                    left.negate().simplify_not().into(),
-                    right.negate().simplify_not().into(),
+                    left.negate().to_nnf().into(),
+                    right.negate().to_nnf().into(),
                 ),
 
                 Self::Or(left, right) => Self::And(
-                    left.negate().simplify_not().into(),
-                    right.negate().simplify_not().into(),
+                    left.negate().to_nnf().into(),
+                    right.negate().to_nnf().into(),
                 ),
-                Self::Not(expression_node) => expression_node.simplify_not(),
+                Self::Not(expression_node) => expression_node.to_nnf(),
             },
         }
     }
@@ -243,7 +265,6 @@ mod test {
     use itertools::Itertools;
 
     use crate::evaluate::traits::Evaluate;
-    use crate::parse::expression_node::CnfNode;
     use crate::parse::parse_root;
     use crate::test_utils::DirEntryMock;
 
@@ -259,14 +280,14 @@ mod test {
                     let node = parse_root(&expression).unwrap();
                     let expected = node.evaluate(&DirEntryMock::default()).unwrap();
 
-                    let simplified = node.simplify_not();
-                    let result = simplified.evaluate(&DirEntryMock::default()).unwrap();
+                    let nnf = node.to_nnf();
+                    let result = nnf.evaluate(&DirEntryMock::default()).unwrap();
                     assert_eq!(
                         result, expected,
-                        "Simplification failed for expression `{expression}`"
+                        "NNF failed for expression `{expression}`"
                     );
 
-                    let cnf = simplified.to_cnf();
+                    let cnf = nnf.to_cnf();
                     let result = cnf.evaluate(&DirEntryMock::default()).unwrap();
                     assert_eq!(
                         result, expected,
@@ -288,6 +309,7 @@ mod test {
     cnf_test!(plain_or, "bool=:0 or bool=:0", 1);
     cnf_test!(plain_and, "bool=:0 and bool=:0", 1);
     cnf_test!(plain_not, "not bool=:0", 1);
+    cnf_test!(plain_simple, "bool=:0", 1);
 
     cnf_test!(not_or, "not (bool=:0 or bool=:1)", 2);
     cnf_test!(not_and, "not (bool=:0 and bool=:1)", 2);
@@ -315,15 +337,18 @@ mod test {
     fn test_1() {
         use crate::parse::render::Render;
 
+        // let expression = "name=a* and (mtime>now-1d and perms<777) or not(name=sample or name=lol or not (size>1B or atime<now-1d))";
         let expression = "bool=false and (bool=false and bool=true) or not(bool=true or bool=false or not (bool=false or bool=true))";
+
         // let expression = "bool=true and (bool=false or (bool=true and bool=false))";
         let expression_node = parse_root(expression).unwrap();
         println!("{}", expression_node.render());
 
-        let cnf = expression_node.simplify_not().to_cnf();
+        let cnf = expression_node.to_nnf();
         println!("{}", cnf.render());
 
-        let q = CnfNode::from(cnf);
-        println!("{}", q.render());
+        // let q = CnfNode::from(cnf);
+        // println!("{}", q.render());
+        // println!("{}", q.to_string());
     }
 }

@@ -1,6 +1,6 @@
 use dot_writer::{Attributes, DotWriter, NodeId, Scope};
 
-use crate::parse::expression_node::{CnfNode, ExpressionNode};
+use crate::parse::expression_node::{NnfNode, ExpressionNode};
 
 pub trait Render {
     fn render(&self) -> String;
@@ -81,12 +81,12 @@ impl Render for ExpressionNode {
 }
 
 
-fn traverse_cnf_node(scope: &mut Scope, root: &CnfNode, counter: &mut usize) -> NodeId {
+fn traverse_cnf_node(scope: &mut Scope, root: &NnfNode, counter: &mut usize) -> NodeId {
     let current = *counter;
     *counter += 1;
 
     match root {
-        CnfNode::Leaf(filter) => {
+        NnfNode::Leaf(filter) => {
             let label = format!("{filter}");
             let mut node = scope.node_named(current.to_string());
             let id = node.id();
@@ -94,7 +94,7 @@ fn traverse_cnf_node(scope: &mut Scope, root: &CnfNode, counter: &mut usize) -> 
 
             id
         }
-        CnfNode::And(cnf_nodes) => {
+        NnfNode::And(cnf_nodes) => {
             let mut graph_node = scope.node_named(current.to_string());
             graph_node.set_label("&");
             let node_id = graph_node.id();
@@ -107,7 +107,7 @@ fn traverse_cnf_node(scope: &mut Scope, root: &CnfNode, counter: &mut usize) -> 
 
             node_id
         }
-        CnfNode::Or(cnf_nodes) => {
+        NnfNode::Or(cnf_nodes) => {
             let mut graph_node = scope.node_named(current.to_string());
             graph_node.set_label("|");
             let node_id = graph_node.id();
@@ -125,7 +125,7 @@ fn traverse_cnf_node(scope: &mut Scope, root: &CnfNode, counter: &mut usize) -> 
 }
 
 
-impl Render for CnfNode {
+impl Render for NnfNode {
     fn render(&self) -> String {
         let mut output_bytes = Vec::new();
         let mut writer = DotWriter::from(&mut output_bytes);
