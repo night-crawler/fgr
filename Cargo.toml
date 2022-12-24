@@ -23,6 +23,9 @@ users = "0.11"
 unix_mode = "0.1"
 infer = "0.9"
 timeout-readwrite = "0.3"
+kissat-rs = { git = "https://github.com/firefighterduck/kissat-rs", branch = "main", version = "0.1" }
+splr = { version = "0.16", features = ["incremental_solver"] }
+bitvec = "1"
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use nom::error::ErrorKind;
+use splr::SolverError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GenericError {
@@ -27,6 +28,9 @@ pub enum GenericError {
 
     #[error("Not a file: {0}")]
     NotAFile(PathBuf),
+
+    #[error("Solver error: {0}, statement: {1}")]
+    CustomSolverError(SolverError, String)
 }
 
 impl GenericError {
@@ -40,6 +44,7 @@ impl GenericError {
             GenericError::IoError(_) => false,
             GenericError::IgnoreError(_) => false,
             GenericError::NotAFile(_) => false,
+            GenericError::CustomSolverError(_, _) => true
         }
     }
 }

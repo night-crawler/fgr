@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Comparison {
     Lt,
     Gt,

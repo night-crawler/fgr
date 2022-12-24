@@ -55,7 +55,6 @@ pub enum Filter {
         value: Permissions,
         comparison: Comparison,
     },
-
     #[cfg(test)]
     Bool {
         value: bool,
@@ -80,6 +79,33 @@ impl Filter {
 
             #[cfg(test)]
             Self::Bool { comparison, .. } => comparison.negate(),
+        }
+    }
+
+    pub fn weight(&self) -> usize {
+        match self {
+            Filter::Name { value, .. } => match value {
+                MatchPattern::Regex(_) => 2,
+                MatchPattern::Glob(_) => 1,
+            },
+            Filter::Extension { value, .. } => match value {
+                MatchPattern::Regex(_) => 2,
+                MatchPattern::Glob(_) => 1,
+            },
+            Filter::Depth { .. } => 1,
+
+            Filter::Size { .. } => 4,
+            Filter::AccessTime { .. } => 4,
+            Filter::ModificationTime { .. } => 4,
+            Filter::User { .. } => 4,
+            Filter::Group { .. } => 4,
+            Filter::Permissions { .. } => 4,
+
+            Filter::Type { .. } => 16,
+            Filter::Contains { .. } => 8,
+
+            #[cfg(test)]
+            Filter::Bool { .. } => 1,
         }
     }
 }
