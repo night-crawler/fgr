@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use nnf::parse_tree::ExpressionNode;
 
-use crate::{parse_root, ExpressionNode, GenericError};
+use crate::parse::filter::Filter;
+use crate::{parse_root, GenericError};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -100,7 +102,7 @@ pub struct Args {
 #[derive(Debug)]
 pub struct Config {
     pub start_dirs: Vec<PathBuf>,
-    pub root: ExpressionNode,
+    pub root: ExpressionNode<Filter>,
 
     pub threads: usize,
 
@@ -127,7 +129,9 @@ impl Config {
             vec![std::env::current_dir()?]
         };
 
-        let root = parse_root(&args.expression)?;
+        let mut root = parse_root(&args.expression)?;
+        root = root.to_nnf();
+        root.sort_by_key(|filter| filter.weight());
 
         Ok(Config {
             start_dirs,

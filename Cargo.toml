@@ -21,11 +21,11 @@ ctrlc = "3.2"
 clap = { version = "4.0.16", features = ["derive", "color", "suggestions"] }
 users = "0.11"
 unix_mode = "0.1"
-infer = "0.9"
+infer = "0.11.0"
 timeout-readwrite = "0.3"
-kissat-rs = { git = "https://github.com/firefighterduck/kissat-rs", branch = "main", version = "0.1" }
-splr = { version = "0.16", features = ["incremental_solver"] }
+#splr = { version = "0.16", features = ["incremental_solver"] }
 bitvec = "1"
+nnf = { git = "https://github.com/night-crawler/nnf", branch = "main", version = "0.1" }
 
 [dev-dependencies]
 tempfile = "3"

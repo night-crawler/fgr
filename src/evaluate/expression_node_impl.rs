@@ -1,9 +1,11 @@
+use nnf::parse_tree::ExpressionNode;
+
 use crate::errors::GenericError;
 use crate::evaluate::traits::Evaluate;
-use crate::parse::expression_node::ExpressionNode;
+use crate::parse::filter::Filter;
 use crate::walk::traits::DirEntryWrapperExt;
 
-impl<E: DirEntryWrapperExt> Evaluate<E> for ExpressionNode {
+impl<E: DirEntryWrapperExt> Evaluate<E> for ExpressionNode<Filter> {
     fn evaluate(&self, entry: &E) -> Result<bool, GenericError> {
         match self {
             ExpressionNode::Leaf(filter) => filter.evaluate(entry),

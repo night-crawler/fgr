@@ -1,3 +1,5 @@
+use nnf::parse_tree::ExpressionNode;
+use nnf::{e_and, e_leaf, e_not, e_or};
 use nom::multi::many0;
 use nom::sequence::tuple;
 use nom::{
@@ -6,14 +8,13 @@ use nom::{
 };
 
 use crate::errors::GenericError;
-use crate::parse::expression_node::ExpressionNode;
+use crate::parse::filter::Filter;
 use crate::parse::primitives::parse_attribute_name;
 use crate::parse::traits::GenericParser;
 use crate::parse::util::ws;
 
 pub mod attribute_token;
 pub mod comparison;
-pub mod expression_node;
 pub mod file_type;
 pub mod filter;
 pub mod match_pattern;
@@ -24,36 +25,36 @@ pub mod time_unit;
 pub mod traits;
 pub mod util;
 
-fn parse_attribute(input: &str) -> IResult<&str, ExpressionNode> {
+fn parse_attribute(input: &str) -> IResult<&str, ExpressionNode<Filter>> {
     let (input, attribute) = parse_attribute_name(input)?;
     let (input, filter) = attribute.parse(input)?;
 
-    Ok((input, ExpressionNode::Leaf(filter)))
+    Ok((input, e_leaf!(filter)))
 }
 
-fn parse_parens(input: &str) -> IResult<&str, ExpressionNode> {
+fn parse_parens(input: &str) -> IResult<&str, ExpressionNode<Filter>> {
     let expressions = delimited(ws(char('(')), parse_or, ws(char(')')));
     ws(expressions)(input)
 }
 
-fn parse_parens_or_attribute(input: &str) -> IResult<&str, ExpressionNode> {
+fn parse_parens_or_attribute(input: &str) -> IResult<&str, ExpressionNode<Filter>> {
     alt((parse_parens, parse_attribute, parse_not))(input)
 }
 
 #[rustfmt::skip]
-fn parse_not(input: &str) -> IResult<&str, ExpressionNode> {
+fn parse_not(input: &str) -> IResult<&str, ExpressionNode<Filter>> {
     let (input, _) = ws(tag("not"))(input)?;
     map(
         alt((
             parse_attribute,
             parse_parens_or_attribute
         )),
-        |expression| ExpressionNode::Not(expression.into()),
+        |expression| e_not!(expression),
     )(input)
 }
 
 #[rustfmt::skip]
-fn parse_or(input: &str) -> IResult<&str, ExpressionNode> {
+fn parse_or(input: &str) -> IResult<&str, ExpressionNode<Filter>> {
     let (input, left) = parse_and(input)?;
     let (input, expressions) = many0(
         tuple((
@@ -66,7 +67,7 @@ fn parse_or(input: &str) -> IResult<&str, ExpressionNode> {
 }
 
 #[rustfmt::skip]
-fn parse_and(input: &str) -> IResult<&str, ExpressionNode> {
+fn parse_and(input: &str) -> IResult<&str, ExpressionNode<Filter>> {
     let (input, left) = parse_parens_or_attribute(input)?;
     let (input, expressions) = many0(
         tuple((
@@ -79,7 +80,7 @@ fn parse_and(input: &str) -> IResult<&str, ExpressionNode> {
 }
 
 #[rustfmt::skip]
-fn parse_expression(expr: ExpressionNode, rem: Vec<(&str, ExpressionNode)>) -> ExpressionNode {
+fn parse_expression(expr: ExpressionNode<Filter>, rem: Vec<(&str, ExpressionNode<Filter>)>) -> ExpressionNode<Filter> {
     rem.into_iter().fold(
         expr,
         |acc, val| parse_operator(val, acc),
@@ -87,17 +88,17 @@ fn parse_expression(expr: ExpressionNode, rem: Vec<(&str, ExpressionNode)>) -> E
 }
 
 fn parse_operator(
-    (operator, expression_right): (&str, ExpressionNode),
-    expression_left: ExpressionNode,
-) -> ExpressionNode {
+    (operator, expression_right): (&str, ExpressionNode<Filter>),
+    expression_left: ExpressionNode<Filter>,
+) -> ExpressionNode<Filter> {
     match operator {
-        "and" => ExpressionNode::And(expression_left.into(), expression_right.into()),
-        "or" => ExpressionNode::Or(expression_left.into(), expression_right.into()),
+        "and" => e_and!(expression_left, expression_right),
+        "or" => e_or!(expression_left, expression_right),
         _ => panic!("Unknown operator: {operator}"),
     }
 }
 
-pub fn parse_root(input: &str) -> Result<ExpressionNode, GenericError> {
+pub fn parse_root(input: &str) -> Result<ExpressionNode<Filter>, GenericError> {
     let (remainder, expression) = parse_or(input)?;
     if !remainder.trim().is_empty() {
         return Err(GenericError::SomeTokensWereNotParsed(remainder.to_string()));
@@ -121,24 +122,12 @@ mod test {
     fn test_parse_size() {
         assert_eq!(
             parse_attribute("size <= 1 B"),
-            Ok((
-                "",
-                ExpressionNode::Leaf(Filter::Size {
-                    value: 1,
-                    comparison: Comparison::Lte,
-                })
-            ))
+            Ok(("", e_leaf!(Filter::Size { value: 1, comparison: Comparison::Lte })))
         );
 
         assert_eq!(
             parse_attribute(" size != 10B"),
-            Ok((
-                "",
-                ExpressionNode::Leaf(Filter::Size {
-                    value: 10,
-                    comparison: Comparison::Neq,
-                })
-            ))
+            Ok(("", e_leaf!(Filter::Size { value: 10, comparison: Comparison::Neq })))
         );
     }
 
@@ -148,7 +137,7 @@ mod test {
             parse_attribute("mtime <= now - 2d"),
             Ok((
                 "",
-                ExpressionNode::Leaf(Filter::ModificationTime {
+                e_leaf!(Filter::ModificationTime {
                     value: Duration::days(-2),
                     comparison: Comparison::Lte,
                 })
@@ -159,7 +148,7 @@ mod test {
             parse_attribute("atime <= now - 2d"),
             Ok((
                 "",
-                ExpressionNode::Leaf(Filter::AccessTime {
+                e_leaf!(Filter::AccessTime {
                     value: Duration::days(-2),
                     comparison: Comparison::Lte,
                 })
@@ -173,7 +162,7 @@ mod test {
             parse_attribute("name = '.*sa mple*.json'"),
             Ok((
                 "",
-                ExpressionNode::Leaf(Filter::Name {
+                e_leaf!(Filter::Name {
                     value: globset::Glob::new(".*sa mple*.json").unwrap().into(),
                     comparison: Comparison::Eq,
                 })
@@ -184,7 +173,7 @@ mod test {
             parse_attribute("contains != r'пример.json' remainder"),
             Ok((
                 " remainder",
-                ExpressionNode::Leaf(Filter::Contains {
+                e_leaf!(Filter::Contains {
                     value: Regex::new("пример.json").unwrap().into(),
                     comparison: Comparison::Neq,
                 })
@@ -196,13 +185,7 @@ mod test {
     fn test_parse_depth() {
         assert_eq!(
             parse_attribute("depth != 2"),
-            Ok((
-                "",
-                ExpressionNode::Leaf(Filter::Depth {
-                    value: 2,
-                    comparison: Comparison::Neq,
-                })
-            ))
+            Ok(("", e_leaf!(Filter::Depth { value: 2, comparison: Comparison::Neq })))
         );
     }
 
@@ -212,7 +195,7 @@ mod test {
             parse_attribute("type != vid"),
             Ok((
                 "",
-                ExpressionNode::Leaf(Filter::Type {
+                e_leaf!(Filter::Type {
                     value: FileType::Video,
                     comparison: Comparison::Neq,
                 })

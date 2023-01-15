@@ -4,8 +4,10 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use ignore::{DirEntry, WalkState};
+use nnf::parse_tree::ExpressionNode;
 
-use crate::{Evaluate, ExpressionNode, GenericError};
+use crate::{Evaluate, GenericError};
+use crate::parse::filter::Filter;
 
 #[derive(Eq, PartialEq)]
 pub enum ProcessStatus {
@@ -23,7 +25,7 @@ pub enum EntryMessage {
 
 pub fn spawn_senders(
     status: &Arc<Mutex<ProcessStatus>>,
-    root_node: &Arc<ExpressionNode>,
+    root_node: &Arc<ExpressionNode<Filter>>,
     sender: kanal::Sender<EntryMessage>,
     parallel_walker: ignore::WalkParallel,
 ) {
@@ -114,7 +116,7 @@ pub fn spawn_receiver(
                     let _ = stderr.write_line(entry.path().to_string_lossy().as_bytes());
                     let _ = stderr.write_line(format!("\t{:?}", error));
                 }
-                Err(kanal::ErrorTimeout::Timeout) => {
+                Err(kanal::ReceiveErrorTimeout::Timeout) => {
                     let _ = stdout.flush();
                     let _ = stderr.flush();
                 }

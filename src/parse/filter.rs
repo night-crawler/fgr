@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::Permissions;
+use std::ops::Not;
 use std::os::unix::prelude::PermissionsExt;
 
 use chrono::Duration;
@@ -62,26 +63,66 @@ pub enum Filter {
     },
 }
 
-impl Filter {
-    pub fn negate(&mut self) {
+impl Not for Filter {
+    type Output = Filter;
+
+    fn not(mut self) -> Self::Output {
         match self {
-            Self::Size { comparison, .. } => comparison.negate(),
-            Self::Depth { comparison, .. } => comparison.negate(),
-            Self::Type { comparison, .. } => comparison.negate(),
-            Self::AccessTime { comparison, .. } => comparison.negate(),
-            Self::ModificationTime { comparison, .. } => comparison.negate(),
-            Self::Name { comparison, .. } => comparison.negate(),
-            Self::Extension { comparison, .. } => comparison.negate(),
-            Self::Contains { comparison, .. } => comparison.negate(),
-            Self::User { comparison, .. } => comparison.negate(),
-            Self::Group { comparison, .. } => comparison.negate(),
-            Self::Permissions { comparison, .. } => comparison.negate(),
+            Self::Size { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::Depth { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::Type { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::AccessTime { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::ModificationTime { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::Name { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::Extension { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::Contains { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::User { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::Group { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
+            Self::Permissions { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
 
             #[cfg(test)]
-            Self::Bool { comparison, .. } => comparison.negate(),
+            Self::Bool { ref mut comparison, .. } => {
+                comparison.negate();
+                self
+            }
         }
     }
+}
 
+impl Filter {
     pub fn weight(&self) -> usize {
         match self {
             Filter::Name { value, .. } => match value {
@@ -147,7 +188,7 @@ impl Display for Filter {
             #[cfg(test)]
             Self::Bool { comparison: _, value } => {
                 write!(f, "{}", &format!("{value}")[..1])
-            },
+            }
         }
     }
 }
