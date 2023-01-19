@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use chrono::Duration;
-use globset::Glob;
+use globset::GlobBuilder;
 use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while};
@@ -9,9 +9,9 @@ use nom::character::complete::{char, one_of};
 use nom::combinator::{map, map_res, opt, recognize};
 use nom::error::{ErrorKind, FromExternalError};
 use nom::multi::{many0, many1};
-use nom::sequence::{delimited, preceded, terminated};
+use nom::sequence::{delimited, preceded, terminated, tuple};
 use nom::IResult;
-use regex::Regex;
+use regex::RegexBuilder;
 
 use crate::parse::attribute_token::AttributeToken;
 use crate::parse::comparison::Comparison;
@@ -141,15 +141,20 @@ pub fn parse_quote_escaped_string(input: &str) -> IResult<&str, &str> {
     alt((single_quote, double_quote))(input)
 }
 
-pub fn parse_pattern_till_first_space(input: &str) -> IResult<&str, &str> {
-    take_while(|ch: char| !ch.is_whitespace() && !"()".contains(ch))(input)
+pub fn parse_pattern_till_first_space(input: &str) -> IResult<&str, (bool, &str)> {
+    let (input, pattern) =
+        take_while(|ch: char| !ch.is_whitespace() && !"()".contains(ch))(input)?;
+
+    Ok((input, (false, pattern)))
 }
 
 pub fn parse_glob_pattern(input: &str) -> IResult<&str, MatchPattern> {
-    let (input, pattern) =
-        alt((parse_quote_escaped_string, parse_pattern_till_first_space))(input)?;
+    let (input, (ignore_case, pattern)) = alt((
+        parse_ignore_case_quote_escaped_string,
+        parse_pattern_till_first_space,
+    ))(input)?;
 
-    match Glob::new(pattern) {
+    match GlobBuilder::new(pattern).case_insensitive(ignore_case).build() {
         Ok(glob) => Ok((input, glob.into())),
         Err(err) => Err(nom::Err::Error(nom::error::Error::from_external_error(
             input,
@@ -159,9 +164,19 @@ pub fn parse_glob_pattern(input: &str) -> IResult<&str, MatchPattern> {
     }
 }
 
+pub fn parse_ignore_case_quote_escaped_string(
+    input: &str,
+) -> IResult<&str, (bool, &str)> {
+    let (input, (ignore_case, pattern)) =
+        tuple((opt(char('i')), parse_quote_escaped_string))(input)?;
+
+    Ok((input, (ignore_case.is_some(), pattern)))
+}
+
 pub fn parse_regex_pattern(input: &str) -> IResult<&str, MatchPattern> {
-    let (input, pattern) = preceded(char('r'), parse_quote_escaped_string)(input)?;
-    compile_regex(input, pattern)
+    let (input, (ignore_case, pattern)) =
+        preceded(char('r'), parse_ignore_case_quote_escaped_string)(input)?;
+    compile_regex(input, ignore_case, pattern)
 }
 
 pub fn parse_pattern(input: &str) -> IResult<&str, MatchPattern> {
@@ -170,9 +185,10 @@ pub fn parse_pattern(input: &str) -> IResult<&str, MatchPattern> {
 
 fn compile_regex<'a, 'b>(
     input: &'a str,
+    ignore_case: bool,
     pattern: &'b str,
 ) -> IResult<&'a str, MatchPattern> {
-    match Regex::new(pattern) {
+    match RegexBuilder::new(pattern).case_insensitive(ignore_case).build() {
         Ok(rx) => Ok((input, MatchPattern::Regex(rx))),
         Err(err) => Err(nom::Err::Error(nom::error::Error::from_external_error(
             input,
@@ -184,6 +200,9 @@ fn compile_regex<'a, 'b>(
 
 #[cfg(test)]
 mod test_primitives {
+    use globset::Glob;
+    use regex::Regex;
+
     use super::*;
 
     #[test]
@@ -250,6 +269,15 @@ mod test_primitives {
     }
 
     #[test]
+    fn test_parse_glob_ignore_case_pattern() {
+        fn g(pattern: &str) -> MatchPattern {
+            GlobBuilder::new(pattern).case_insensitive(true).build().unwrap().into()
+        }
+
+        assert_eq!(parse_glob_pattern(r"i'sample?*='"), Ok(("", g("sample?*="))));
+    }
+
+    #[test]
     fn test_parse_regex_pattern() {
         fn r(pattern: &str) -> MatchPattern {
             MatchPattern::Regex(Regex::new(pattern).unwrap())
@@ -264,7 +292,19 @@ mod test_primitives {
     }
 
     #[test]
+    fn test_parse_regex_ignore_case_pattern() {
+        fn r(pattern: &str) -> MatchPattern {
+            RegexBuilder::new(pattern).case_insensitive(true).build().unwrap().into()
+        }
+
+        assert_eq!(
+            parse_regex_pattern(r"ri'sample'"),
+            Ok(("", r(r"sample")))
+        );
+    }
+
+    #[test]
     fn test_parse_pattern_till_first_space() {
-        assert_eq!(parse_pattern_till_first_space("sample"), Ok(("", "sample")));
+        assert_eq!(parse_pattern_till_first_space("sample"), Ok(("", (false, "sample"))));
     }
 }
