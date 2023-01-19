@@ -32,6 +32,18 @@ Examples:
     Find files with containing 's' and 777 permissions:
     fgr /home /bin -e 'name=*s* and perm=777'
 
+    # Find files with name containing SAMPLE:
+    fgr /home -e 'name="*SAMPLE*"'
+
+    # Find files with name containing SAMPLE ignore case:
+    fgr /home -e 'name=i"*SAMPLE*"'
+
+    # Find files with name containing SAMPLE (regex):
+    fgr /home -e 'name=r".+SAMPLE.+"'
+
+    # Find files with name containing SAMPLE ignore case (regex):
+    fgr /home -e 'name=ri".+SAMPLE.+"'
+
     Find files under the /bin directory not owned by root:
     fgr /bin -e 'user > 0'
 
@@ -39,7 +51,7 @@ Examples:
     fgr /bin -e 'perms>4000'
 
     Find recently accessed files (but not in future):
-    fgr /home -e 'atime > now - 1h and atime < now - 0h'
+    fgr /home -e 'atime > now - 1h and atime < now'
 
     Find stuff in files:
     fgr /home -e 'type=text and contains=*stuff*'

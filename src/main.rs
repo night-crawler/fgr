@@ -24,12 +24,13 @@ fn main() {
     let config = match Config::build() {
         Ok(config) => config,
         Err(error) => {
-            println!("Failed to build configuration: {:?}", error);
+            eprintln!("Failed to build configuration: {:?}", error);
             std::process::exit(1);
         }
     };
 
     if config.print_expression_tree {
+        println!("{}", config.root);
         println!("{}", config.root.render());
         std::process::exit(0);
     }
