@@ -80,8 +80,7 @@ pub fn parse_comparison(input: &str) -> IResult<&str, Comparison> {
     )(input)
 }
 
-pub fn parse_duration(input: &str) -> IResult<&str, Duration> {
-    let (input, _) = ws(tag("now"))(input)?;
+fn parse_signed_delta(input: &str) -> IResult<&str, Duration> {
     let (input, sign) = ws(alt((char('+'), char('-'))))(input)?;
     let (input, number) = parse_positive_number(input)?;
     let (input, time_unit) = parse_time_unit(input)?;
@@ -90,6 +89,14 @@ pub fn parse_duration(input: &str) -> IResult<&str, Duration> {
     if sign == '-' {
         duration = -duration;
     }
+
+    Ok((input, duration))
+}
+
+pub fn parse_duration(input: &str) -> IResult<&str, Duration> {
+    let (input, _) = ws(tag("now"))(input)?;
+    let (input, duration) = opt(parse_signed_delta)(input)?;
+    let duration = duration.unwrap_or_else(|| TimeUnit::Second.to_duration(0));
 
     Ok((input, duration))
 }
@@ -243,7 +250,8 @@ mod test_primitives {
 
     #[test]
     fn test_parse_duration() {
-        assert_eq!(parse_duration("now - 1d"), Ok(("", Duration::days(-1))))
+        assert_eq!(parse_duration("now - 1d"), Ok(("", Duration::days(-1))));
+        assert_eq!(parse_duration("now"), Ok(("", Duration::days(0))));
     }
 
     #[test]
