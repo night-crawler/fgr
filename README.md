@@ -59,7 +59,7 @@ sudo sh -c 'echo 1 >/proc/sys/vm/drop_caches'
 sudo sh -c 'echo 2 >/proc/sys/vm/drop_caches'
 sudo sh -c 'echo 3 >/proc/sys/vm/drop_caches'
 
-./fgr /home -e 'name=*sample*' # 1.09s user 2.70s system 169% cpu 2.239 total
+fgr /home -e 'name=*sample*' # 1.09s user 2.70s system 169% cpu 2.239 total
 
 sudo sh -c 'echo 1 >/proc/sys/vm/drop_caches'
 sudo sh -c 'echo 2 >/proc/sys/vm/drop_caches'
@@ -70,13 +70,13 @@ find /home -name '*sample*' # 0.71s user 2.09s system 12% cpu 22.156 total
 
 ## TODO
 
-- [ ] Query precedence evaluation
+- [x] Query precedence evaluation
 - [ ] Query optimization: https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf
 - [ ] Run command
 - [ ] Exclude patterns & default exclude patterns (handling `/proc/**/pagemap` scenarios)
-- [ ] Binary/Text type detector
-- [ ] Ignore case searches
+- [x] Binary/Text type detector
+- [x] Ignore case searches
 - [ ] Error printing
-- [ ] Progress reporting
+- [x] Progress reporting
 - [ ] Documentation
 - [ ] AUR

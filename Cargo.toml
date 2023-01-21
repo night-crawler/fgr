@@ -15,7 +15,7 @@ dot-writer = "0.1.2"
 ignore = "0.4"
 regex = "1"
 globset = "0.4"
-kanal = { git = "https://github.com/fereidani/kanal" }
+kanal = { git = "https://github.com/fereidani/kanal", rev = "71281294e8456194c382ff616400a60601289bbc" }
 num_cpus = "1.13"
 ctrlc = "3.2"
 clap = { version = "4.0.16", features = ["derive", "color", "suggestions"] }
