@@ -1,4 +1,5 @@
-use std::io::{LineWriter, Write};
+use std::io::{LineWriter, Stderr, Stdout, Write};
+use std::os::unix::ffi::OsStrExt;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -6,8 +7,8 @@ use std::time::Duration;
 use ignore::{DirEntry, WalkState};
 use nnf::parse_tree::ExpressionNode;
 
-use crate::{Evaluate, GenericError};
 use crate::parse::filter::Filter;
+use crate::{Evaluate, GenericError};
 
 #[derive(Eq, PartialEq)]
 pub enum ProcessStatus {
@@ -85,6 +86,56 @@ impl<T: Write> LineWriterExt for LineWriter<T> {
     }
 }
 
+struct EntryWriter {
+    status: Arc<Mutex<ProcessStatus>>,
+    receiver: kanal::Receiver<EntryMessage>,
+    stdout: LineWriter<Stdout>,
+    stderr: LineWriter<Stderr>,
+    recv_timeout: Duration,
+}
+
+impl EntryWriter {
+    fn new(
+        stdout: LineWriter<Stdout>,
+        stderr: LineWriter<Stderr>,
+        receiver: kanal::Receiver<EntryMessage>,
+        recv_timeout: Duration,
+        status: Arc<Mutex<ProcessStatus>>,
+    ) -> Self {
+        Self { stdout, stderr, receiver, recv_timeout, status }
+    }
+
+    fn receive(&mut self) -> Result<(), kanal::ReceiveErrorTimeout> {
+        match self.receiver.recv_timeout(self.recv_timeout) {
+            Ok(EntryMessage::Success(entry)) => {
+                // write the name without converting it to utf8
+                let write_result =
+                    self.stdout.write_line(entry.path().as_os_str().as_bytes());
+                if write_result.is_err() {
+                    let _ = self.stderr.write_line("Failed to write to stdout");
+                    *self.status.lock().unwrap() = ProcessStatus::SendError;
+                }
+            }
+            Ok(EntryMessage::Init) => {
+                self.stdout.flush().unwrap();
+            }
+            Ok(EntryMessage::Error(entry, error)) => {
+                let _ = self.stderr.write_line(entry.path().to_string_lossy().as_bytes());
+                let _ = self.stderr.write_line(format!("\t{:?}", error));
+            }
+            Err(kanal::ReceiveErrorTimeout::Timeout) => {
+                let _ = self.stdout.flush();
+                let _ = self.stderr.flush();
+            }
+            Err(err) => {
+                return Err(err);
+            }
+        }
+
+        Ok(())
+    }
+}
+
 pub fn spawn_receiver(
     status: &Arc<Mutex<ProcessStatus>>,
     receiver: kanal::Receiver<EntryMessage>,
@@ -92,38 +143,26 @@ pub fn spawn_receiver(
     let status = Arc::clone(status);
 
     std::thread::spawn(move || {
-        let mut stdout = LineWriter::with_capacity(1024 * 16, std::io::stdout());
-        let mut stderr = LineWriter::with_capacity(1024 * 16, std::io::stderr());
+        let stdout = LineWriter::with_capacity(1024 * 16, std::io::stdout());
+        let stderr = LineWriter::with_capacity(1024 * 16, std::io::stderr());
+
+        let mut writer = EntryWriter::new(
+            stdout,
+            stderr,
+            receiver,
+            Duration::from_millis(100),
+            status,
+        );
 
         loop {
-            if !status.lock().unwrap().eq(&ProcessStatus::InProgress) {
+            if !writer.status.lock().unwrap().eq(&ProcessStatus::InProgress) {
                 break 1;
             }
 
-            match receiver.recv_timeout(Duration::from_millis(100)) {
-                Ok(EntryMessage::Success(entry)) => {
-                    let write_result =
-                        stdout.write_line(entry.path().to_string_lossy().as_bytes());
-                    if write_result.is_err() {
-                        let _ = stderr.write_line("Failed to write to stdout");
-                        *status.lock().unwrap() = ProcessStatus::SendError;
-                    }
-                }
-                Ok(EntryMessage::Init) => {
-                    stdout.flush().unwrap();
-                }
-                Ok(EntryMessage::Error(entry, error)) => {
-                    let _ = stderr.write_line(entry.path().to_string_lossy().as_bytes());
-                    let _ = stderr.write_line(format!("\t{:?}", error));
-                }
-                Err(kanal::ReceiveErrorTimeout::Timeout) => {
-                    let _ = stdout.flush();
-                    let _ = stderr.flush();
-                }
-                Err(_) => {
-                    break 0;
-                }
-            };
+            // TODO: check for other errors
+            if writer.receive().is_err() {
+                break 0;
+            }
         }
     })
 }
