@@ -7,6 +7,7 @@ use std::time::Duration;
 use ignore::{DirEntry, WalkState};
 use nnf::parse_tree::ExpressionNode;
 
+use crate::config::Config;
 use crate::parse::filter::Filter;
 use crate::{Evaluate, GenericError};
 
@@ -76,41 +77,72 @@ pub fn spawn_senders(
 
 trait LineWriterExt {
     fn write_line(&mut self, buf: impl AsRef<[u8]>) -> Result<(), std::io::Error>;
+    fn write_line_sep(
+        &mut self,
+        buf: impl AsRef<[u8]>,
+        sep: u8,
+    ) -> Result<(), std::io::Error>;
 }
 
 impl<T: Write> LineWriterExt for LineWriter<T> {
+    #[inline(always)]
     fn write_line(&mut self, buf: impl AsRef<[u8]>) -> Result<(), std::io::Error> {
+        self.write_line_sep(buf, b'\n')
+    }
+
+    #[inline(always)]
+    fn write_line_sep(
+        &mut self,
+        buf: impl AsRef<[u8]>,
+        sep: u8,
+    ) -> Result<(), std::io::Error> {
         self.write_all(buf.as_ref())?;
-        self.write_all(b"\n")?;
+        self.write_all(&[sep])?;
         Ok(())
     }
 }
 
-struct EntryWriter {
+pub struct EntryReceiver {
     status: Arc<Mutex<ProcessStatus>>,
     receiver: kanal::Receiver<EntryMessage>,
     stdout: LineWriter<Stdout>,
     stderr: LineWriter<Stderr>,
     recv_timeout: Duration,
+    separator: u8,
 }
 
-impl EntryWriter {
-    fn new(
-        stdout: LineWriter<Stdout>,
-        stderr: LineWriter<Stderr>,
+impl EntryReceiver {
+    pub fn new(
+        config: Config,
+        stdout_capacity: usize,
+        stderr_capacity: usize,
         receiver: kanal::Receiver<EntryMessage>,
         recv_timeout: Duration,
-        status: Arc<Mutex<ProcessStatus>>,
+        status: &Arc<Mutex<ProcessStatus>>,
     ) -> Self {
-        Self { stdout, stderr, receiver, recv_timeout, status }
+        let stdout = LineWriter::with_capacity(stdout_capacity, std::io::stdout());
+        let stderr = LineWriter::with_capacity(stderr_capacity, std::io::stderr());
+
+        let separator = if config.print0 { b'\0' } else { b'\n' };
+
+        Self {
+            separator,
+            stdout,
+            stderr,
+            receiver,
+            recv_timeout,
+            status: Arc::clone(status),
+        }
     }
 
     fn receive(&mut self) -> Result<(), kanal::ReceiveErrorTimeout> {
         match self.receiver.recv_timeout(self.recv_timeout) {
             Ok(EntryMessage::Success(entry)) => {
                 // write the name without converting it to utf8
-                let write_result =
-                    self.stdout.write_line(entry.path().as_os_str().as_bytes());
+                let write_result = self
+                    .stdout
+                    .write_line_sep(entry.path().as_os_str().as_bytes(), self.separator);
+
                 if write_result.is_err() {
                     let _ = self.stderr.write_line("Failed to write to stdout");
                     *self.status.lock().unwrap() = ProcessStatus::SendError;
@@ -120,7 +152,8 @@ impl EntryWriter {
                 self.stdout.flush().unwrap();
             }
             Ok(EntryMessage::Error(entry, error)) => {
-                let _ = self.stderr.write_line(entry.path().to_string_lossy().as_bytes());
+                // write the name without converting it to utf8
+                let _ = self.stderr.write_line(entry.path().as_os_str().as_bytes());
                 let _ = self.stderr.write_line(format!("\t{:?}", error));
             }
             Err(kanal::ReceiveErrorTimeout::Timeout) => {
@@ -134,37 +167,21 @@ impl EntryWriter {
 
         Ok(())
     }
-}
 
-pub fn spawn_receiver(
-    status: &Arc<Mutex<ProcessStatus>>,
-    receiver: kanal::Receiver<EntryMessage>,
-) -> JoinHandle<i32> {
-    let status = Arc::clone(status);
+    pub fn receive_all(mut self) -> JoinHandle<i32> {
+        std::thread::spawn(move || {
+            loop {
+                if !self.status.lock().unwrap().eq(&ProcessStatus::InProgress) {
+                    break 1;
+                }
 
-    std::thread::spawn(move || {
-        let stdout = LineWriter::with_capacity(1024 * 16, std::io::stdout());
-        let stderr = LineWriter::with_capacity(1024 * 16, std::io::stderr());
-
-        let mut writer = EntryWriter::new(
-            stdout,
-            stderr,
-            receiver,
-            Duration::from_millis(100),
-            status,
-        );
-
-        loop {
-            if !writer.status.lock().unwrap().eq(&ProcessStatus::InProgress) {
-                break 1;
+                // TODO: check for other errors
+                if self.receive().is_err() {
+                    break 0;
+                }
             }
-
-            // TODO: check for other errors
-            if writer.receive().is_err() {
-                break 0;
-            }
-        }
-    })
+        })
+    }
 }
 
 pub fn set_int_handler(status: &Arc<Mutex<ProcessStatus>>) {

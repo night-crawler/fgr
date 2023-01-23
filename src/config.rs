@@ -26,10 +26,10 @@ PATTERN can be either a glob (sample*) or regex: r"sample.+" or r'sample.+'.
 PATTERN can be either a plain expression (*glob*) or it can be wtapped in quotes: ('*glob') or ("*glob*").
 
 Examples:
-    Find all files with name equal to sample under the current directory:
+    Find all files with name equal to 'sample' under the current directory:
     fgr -e name=sample
 
-    Find files with containing 's' and 777 permissions:
+    Find files containing 's' in name and 777 permissions:
     fgr /home /bin -e 'name=*s* and perm=777'
 
     # Find files with name containing SAMPLE:
@@ -77,6 +77,10 @@ pub struct Args {
 
     #[arg(short, long, default_value_t = num_cpus::get())]
     threads: usize,
+
+    /// Equivalent to -print0 in find
+    #[arg(short = 'p')]
+    print0: bool,
 
     /// Enable all standard filters (all filters below)
     #[arg(short, long, default_value_t = false)]
@@ -129,6 +133,7 @@ pub struct Config {
     pub same_filesystem: Option<bool>,
 
     pub print_expression_tree: bool,
+    pub print0: bool,
 }
 
 impl Config {
@@ -162,6 +167,7 @@ impl Config {
             same_filesystem: args.same_filesystem,
 
             print_expression_tree: args.print_expression_tree,
+            print0: args.print0
         })
     }
 }
