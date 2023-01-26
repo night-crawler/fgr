@@ -167,7 +167,7 @@ impl Config {
             same_filesystem: args.same_filesystem,
 
             print_expression_tree: args.print_expression_tree,
-            print0: args.print0
+            print0: args.print0,
         })
     }
 }

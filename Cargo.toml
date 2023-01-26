@@ -1,6 +1,6 @@
 [package]
-name = "fgr"
-version = "0.1.0"
+name = "fgr-rs"
+version = "0.1.1"
 edition = "2021"
 description = "A Find & Grep command line utility with SQL-like syntax"
 homepage = "https://github.com/night-crawler/fgr"

@@ -305,10 +305,7 @@ mod test_primitives {
             RegexBuilder::new(pattern).case_insensitive(true).build().unwrap().into()
         }
 
-        assert_eq!(
-            parse_regex_pattern(r"ri'sample'"),
-            Ok(("", r(r"sample")))
-        );
+        assert_eq!(parse_regex_pattern(r"ri'sample'"), Ok(("", r(r"sample"))));
     }
 
     #[test]

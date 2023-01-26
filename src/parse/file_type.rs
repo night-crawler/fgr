@@ -1,6 +1,5 @@
-use infer::MatcherType;
 use crate::mk_filter_enum;
-
+use infer::MatcherType;
 
 mk_filter_enum!(FileType, FILE_TYPE_ALIASES, [
     App: "t", "text",
@@ -14,7 +13,6 @@ mk_filter_enum!(FileType, FILE_TYPE_ALIASES, [
     Video: "video", "vid",
     Custom: "custom"
 ]);
-
 
 impl From<MatcherType> for FileType {
     fn from(matcher_type: MatcherType) -> Self {

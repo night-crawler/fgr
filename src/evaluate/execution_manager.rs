@@ -86,7 +86,10 @@ impl ExecutionManager {
         }
     }
 
-    fn tseitin_transform(root: Nnf<FilterVar>, mut counter: usize) -> (Nnf<FilterVar>, BTreeMap<Nnf<FilterVar>, Nnf<FilterVar>>) {
+    fn tseitin_transform(
+        root: Nnf<FilterVar>,
+        mut counter: usize,
+    ) -> (Nnf<FilterVar>, BTreeMap<Nnf<FilterVar>, Nnf<FilterVar>>) {
         let mut aux_var_map = BTreeMap::new();
         let transformer = TseitinTransform::new(|node| {
             let var = var!(FilterVar::new_aux(counter));
@@ -129,8 +132,8 @@ impl ComputationWeight for Nnf<FilterVar> {
 
 #[cfg(test)]
 mod tests {
-    use nnf::{or, var};
     use nnf::traits::Render;
+    use nnf::{or, var};
 
     use crate::evaluate::execution_manager::ExecutionManager;
     use crate::evaluate::execution_manager::FilterVar;

@@ -242,8 +242,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "fgr"
-version = "0.1.0"
+name = "fgr-rs"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "clap",

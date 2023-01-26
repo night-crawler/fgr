@@ -28,7 +28,6 @@ pub enum GenericError {
 
     #[error("Not a file: {0}")]
     NotAFile(PathBuf),
-
     // #[error("Solver error: {0}, statement: {1}")]
     // CustomSolverError(SolverError, String)
 }

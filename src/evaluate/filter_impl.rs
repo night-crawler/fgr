@@ -77,15 +77,11 @@ impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
                 Ok(comparison.evaluate(is_match, true))
             }
             Self::Extension { value, comparison } => {
-                let name = entry.get_name().to_string_lossy();
-                let name_str = name.as_ref();
-                let extension = if let Some((_, extension)) = name_str.split_once('.') {
-                    extension
+                if let Some(extension) = entry.get_path().extension() {
+                    Ok(comparison.evaluate(value.is_match(extension.to_string_lossy()), true))
                 } else {
-                    return Ok(false);
-                };
-
-                Ok(comparison.evaluate(value.is_match(extension), true))
+                    Ok(comparison.evaluate(false, true))
+                }
             }
             Self::Contains { value, comparison } => {
                 if entry.get_entry_type() != EntryType::File {
@@ -106,7 +102,7 @@ impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
                 for line in reader.lines() {
                     match line {
                         Ok(line) if value.is_match(&line) => {
-                            return Ok(comparison.evaluate(true, true))
+                            return Ok(comparison.evaluate(true, true));
                         }
                         Err(err) => {
                             return Err(err.into());
@@ -114,7 +110,7 @@ impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
                         _ => continue,
                     }
                 }
-                Ok(false)
+                Ok(comparison.evaluate(false, true))
             }
             Self::User { value, comparison } => {
                 Ok(comparison.evaluate(entry.get_user_id()?, *value))
@@ -141,7 +137,12 @@ impl<E: DirEntryWrapperExt> Evaluate<E> for Filter {
 mod tests {
     use std::io::Write;
     use std::ops::Add;
+    #[cfg(target_os = "linux")]
     use std::os::linux::fs::MetadataExt;
+
+    #[cfg(target_os = "macos")]
+    use std::os::macos::fs::MetadataExt;
+
     use std::path::PathBuf;
 
     use chrono::Duration;
