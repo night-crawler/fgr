@@ -409,8 +409,9 @@ dependencies = [
 
 [[package]]
 name = "kanal"
-version = "0.1.0-pre7"
-source = "git+https://github.com/fereidani/kanal?rev=71281294e8456194c382ff616400a60601289bbc#71281294e8456194c382ff616400a60601289bbc"
+version = "0.1.0-pre8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b05d55519627edaf7fd0f29981f6dc03fb52df3f5b257130eb8d0bf2801ea1d7"
 dependencies = [
  "futures-core",
  "lock_api",
@@ -489,7 +490,8 @@ dependencies = [
 [[package]]
 name = "nnf"
 version = "0.1.0"
-source = "git+https://github.com/night-crawler/nnf?branch=main#f6ff812f6c25b33407c864ada5311b6644be4fb5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5defc6ece0fbfea1e26596a5c70f50f35a354c7d8cd9bb2a7416b5c6d077278e"
 dependencies = [
  "dot-writer",
 ]

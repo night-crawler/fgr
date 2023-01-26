@@ -2,6 +2,11 @@
 name = "fgr"
 version = "0.1.0"
 edition = "2021"
+description = "A Find & Grep command line utility with SQL-like syntax"
+homepage = "https://github.com/night-crawler/fgr"
+repository = "https://github.com/night-crawler/fgr"
+license = "MIT"
+readme = "README.md"
 
 [dependencies]
 nom = "7"
@@ -15,7 +20,7 @@ dot-writer = "0.1.2"
 ignore = "0.4"
 regex = "1"
 globset = "0.4"
-kanal = { git = "https://github.com/fereidani/kanal", rev = "71281294e8456194c382ff616400a60601289bbc" }
+kanal = "0.1.0-pre8"
 num_cpus = "1.13"
 ctrlc = "3.2"
 clap = { version = "4.0.16", features = ["derive", "color", "suggestions"] }
@@ -23,9 +28,7 @@ users = "0.11"
 unix_mode = "0.1"
 infer = "0.12.0"
 timeout-readwrite = "0.3"
-#splr = { version = "0.16", features = ["incremental_solver"] }
-#bitvec = "1"
-nnf = { git = "https://github.com/night-crawler/nnf", branch = "main", version = "0.1" }
+nnf = "0.1.0"
 
 [dev-dependencies]
 tempfile = "3"

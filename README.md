@@ -1,13 +1,10 @@
 # fgr
 
-
-
 Find & Grep utility with SQL-like query language.
 
 ## Examples
 
 ```bash
-
 # Find all files with name equal to sample under the current directory:
 fgr -e name=sample
 
@@ -43,7 +40,28 @@ fgr /home /bin -e 'name=*s* and perm=777 or (name=*rs and contains=r".+user.is_b
 fgr /home /bin -e 'name=*s* and perm=777 or (name=*rs and contains=*birth*)'
 fgr /home /bin -e 'ext=so and mtime >= now - 1d'
 fgr /home -e 'size>=1Mb and name != *.rs and type=vid'
+
+# xargs & -print0 support
+fgr /home -e 'perms=777' -p | xargs -0 -n1 | sort
+
 ```
+
+## Features
+ 
+ - Filter files by:
+   - Size
+   - Depth
+   - Type (text, app, archive, audio, book, doc, font, img, vid)
+   - atime, mtime
+   - name, extension
+   - contents
+   - user, group, permissions
+ - Timeout IO operations (does not hang parsing files like `/sys/kernel/security/apparmor/revision`) 
+ - Regex & Glob name matching
+ - Regex & Glob contents matching
+ - Nexted expressions
+ - Human-readable atime/mtime search patterns
+ - `.ignore` support, thanks to [ignore](https://docs.rs/ignore/latest/ignore/) crate
 
 ## Speed
 
@@ -71,12 +89,10 @@ find /home -name '*sample*' # 0.71s user 2.09s system 12% cpu 22.156 total
 ## TODO
 
 - [x] Query precedence evaluation
-- [ ] Query optimization: https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf
 - [ ] Run command
 - [ ] Exclude patterns & default exclude patterns (handling `/proc/**/pagemap` scenarios)
 - [x] Binary/Text type detector
 - [x] Ignore case searches
 - [ ] Error printing
-- [x] Progress reporting
 - [ ] Documentation
 - [ ] AUR
