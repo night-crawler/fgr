@@ -1,5 +1,9 @@
 # fgr
 
+[![Rust](https://github.com/night-crawler/fgr/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/night-crawler/fgr/actions/workflows/rust.yml)
+[![crates.io](https://img.shields.io/crates/v/fgr-rs.svg)](https://crates.io/crates/fgr-rs)
+[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 Find & Grep utility with SQL-like query language.
 
 ## Examples
