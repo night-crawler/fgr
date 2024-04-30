@@ -24,7 +24,7 @@ kanal = "0.1.0-pre8"
 num_cpus = "1.13"
 ctrlc = "3.2"
 clap = { version = "4.0.16", features = ["derive", "color", "suggestions"] }
-users = "0.11"
+uzers = "0.12"
 unix_mode = "0.1"
 infer = "0.15"
 timeout-readwrite = "0.3"

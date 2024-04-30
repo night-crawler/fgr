@@ -11,7 +11,7 @@ use nom::combinator::{map, map_res, opt};
 use nom::error::ErrorKind;
 use nom::sequence::terminated;
 use nom::IResult;
-use users::{Groups, Users, UsersCache};
+use uzers::{Groups, Users, UsersCache};
 
 use crate::parse::comparison::Comparison;
 use crate::parse::filter::Filter;
